@@ -1,0 +1,44 @@
+[
+    {
+        "type": "numeric",
+        "title": "Slide Duration",
+        "key": "slide_duration",
+        "section": "general"
+    },
+    {
+        "type": "bool",
+        "title": "Display Images",
+        "key": "display_images",
+        "section": "general"
+    },
+    {
+        "type": "bool",
+        "title": "Display GIFs",
+        "key": "display_gifs",
+        "section": "general"
+    },
+    {
+        "type": "bool",
+        "title": "Display Videos",
+        "key": "display_gifs",
+        "section": "general"
+    },
+    {
+        "type": "bool",
+        "title": "Display Long Images",
+        "key": "display_long_images",
+        "section": "general"
+    },
+    {
+        "type": "bool",
+        "title": "Display Bad Aspect Ratio Files",
+        "key": "display_bad_aspect_ratio",
+        "section": "general"
+    },
+    {
+        "type": "bool",
+        "title": "Only Display Pixel Art",
+        "key": "only_pixel_art",
+        "section": "general"
+    }
+]
