@@ -933,7 +933,7 @@ class MainApp(MDApp):
 		# 1) switch to recycle view
 		# 2) only fully load close objects in carousel, and leave the rest as placeholders, then load/unload while scrolling
 
-		files_dir = 'art to display'
+		files_dir = '../fanart'
 
 		# acceptable_extensions = [item for sublist in [
 		# 	['.jpg', '.jpeg', '.png'] if CONFIG.get('general', 'display_images') else [],
