@@ -648,7 +648,7 @@ def get_widget_for_file(filepath, window_width, window_height):
 
 		print(pixel_1, pixel_2, pixel_3, pixel_4)
 
-		if not pixel_is_transparent(pixel_1) and pixel_is_transparent(pixel_2) and pixel_is_transparent(pixel_3) and pixel_is_transparent(pixel_4):
+		if not (pixel_is_transparent(pixel_1) and pixel_is_transparent(pixel_2) and pixel_is_transparent(pixel_3) and pixel_is_transparent(pixel_4)):
 			# image does not have transparent edges, so apply a backgorund
 			background_color = get_background_color(pixel_1, pixel_2, pixel_3, pixel_4)
 			if background_color is not None:
