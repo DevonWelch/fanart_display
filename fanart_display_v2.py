@@ -261,19 +261,71 @@ class CustomScatterLayout(ScatterLayout):
 		if not LOCKED:
 			super(CustomScatterLayout, self).on_touch_move(arg, **kwargs)
 
-			max_x = (self.window_width - self.width) / 2
-			min_x = -max_x
+
+
+			# max_x = (self.window_width - self.width) / 2
+			# min_x = -max_x
+
+			# print(self.x)
+			# print(max_x)
+			# if self.x < min_x:
+			# 	self.x = min_x
+			# elif self.x > max_x:
+			# 	self.x = max_x
+
+
+
+			# max_y = (self.window_height - self.height) / 2
+			# min_y = -max_y
+			# if self.y < min_y:
+			# 	self.y = min_y
+			# elif self.y > max_y:
+			# 	self.y = max_y
+
+			# max_x = (self.width * self.scale - self.window_width)
+			# # min_x = -max_x
+
+			# print(self.x)
+			# print(max_x)
+			# if self.x < 0:
+			# 	self.x = 0
+			# elif self.x > max_x:
+			# 	self.x = max_x
+
+
+
+			# max_y = (self.height * self.scale - self.window_height)
+			# # min_y = -max_y
+			# if self.y < 0:
+			# 	self.y = 0
+			# elif self.y > max_y:
+			# 	self.y = max_y
+
+			min_x = (self.window_width - self.width * self.scale)
+			print(self.x)
+			print(min_x)
+			# min_x = -max_x
+
+			# print(self.x)
+			# print(max_x)
 			if self.x < min_x:
 				self.x = min_x
-			elif self.x > max_x:
-				self.x = max_x
+			elif self.x > 0:
+				self.x = 0
 
-			max_y = (self.window_height - self.height) / 2
-			min_y = -max_y
+
+
+			min_y = (self.window_height - self.height * self.scale)
+			# min_y = -max_y
 			if self.y < min_y:
 				self.y = min_y
-			elif self.y > max_y:
-				self.y = max_y
+			elif self.y > 0:
+				self.y = 0
+
+	# def on_scale(self, instance, value):
+	# 	global LOCKED
+	# 	if not LOCKED:
+	# 		super(CustomScatterLayout, self).on_scale(arg, **kwargs)
 
 	# def on_x(self, obj, new_x, **kwargs):
 	# 	# make sure that x doesn't become something that would allow a portion of the screen to not be covered by the scatter layout
@@ -516,12 +568,19 @@ class FileCarousel(Carousel):
 		# if value != len(self.file_list) - 1:
 		# 	self.index = len(self.file_list) - 1
 
+	def current_slide_zoomed(self):
+		return isinstance(self.current_slide, StencilView) and self.current_slide.children[0].scale != 1
+
+
 	def on_touch_move(self, event, **kwargs):
 		# global NAV
 		# NAV.visible = not NAV.visible
 		# print(NAV)
+		print("here")
 		global LOCKED
-		if not (isinstance(self.current_slide, CustomScatterLayout) and self.current_slide.scale != 1) and not LOCKED:
+		# if isinstance(self.current_slide, CustomScatterLayout):
+		# 	print(self.current_slide.scale)
+		if not self.current_slide_zoomed() and not LOCKED:
 			super(FileCarousel, self).on_touch_move(event, **kwargs)
 			self.is_moving = True
 
