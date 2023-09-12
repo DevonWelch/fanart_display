@@ -5,6 +5,8 @@ import os
 from io import BytesIO
 from random import shuffle
 
+#os.environ['KIVY_IMAGE'] = 'pil'
+
 from kivy.lang import Builder
 from kivy.core.window import Window
 from kivy.graphics import RenderContext, Color, Rectangle, Line
@@ -22,7 +24,7 @@ from kivy.uix.carousel import Carousel
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.uix.effectwidget import EffectWidget, HorizontalBlurEffect, VerticalBlurEffect
-from PIL import Image as PilImage, ImageFilter as PilImageFilter
+from PIL import Image as PilImage, ImageFilter as PilImageFilter, ImageFile
 from kivy.core.image import Image as CoreImage
 from kivy.animation import Animation
 from kivy.uix.stencilview import StencilView
@@ -32,6 +34,8 @@ from kivy.config import ConfigParser
 # from skimage import color as sk_color
 # import numpy as np
 from screeninfo import get_monitors
+
+#ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 MANAGER = None
 CAROUSEL = None
@@ -607,6 +611,9 @@ def get_background_color(pixel_1, pixel_2, pixel_3, pixel_4):
 	
 # 	return None
 
+def pixel_is_transparent(pixel):
+	return len(pixel) == 4 and pixel[3] == 0
+
 def get_widget_for_file(filepath, window_width, window_height):
 	print(filepath)
 	_, ext = os.path.splitext(filepath)
@@ -641,7 +648,7 @@ def get_widget_for_file(filepath, window_width, window_height):
 
 		print(pixel_1, pixel_2, pixel_3, pixel_4)
 
-		if pixel_1[3] != 0 and pixel_2[3] != 0 and pixel_3[3] != 0 and pixel_4[3] != 0:
+		if not pixel_is_transparent(pixel_1) and pixel_is_transparent(pixel_2) and pixel_is_transparent(pixel_3) and pixel_is_transparent(pixel_4):
 			# image does not have transparent edges, so apply a backgorund
 			background_color = get_background_color(pixel_1, pixel_2, pixel_3, pixel_4)
 			if background_color is not None:
@@ -916,13 +923,15 @@ class MainApp(MDApp):
 
 	def build(self):
 		Window.fullscreen = 'auto'
-		monitor_1 = get_monitors()[0]
+		#monitor_1 = get_monitors()[0]
 		# Window.size = (1920, 1080)
 		# window_width = 1920.0
 		# window_height = 1080.0
-		dpi_multiplier = 2
-		window_width = monitor_1.width * dpi_multiplier
-		window_height = monitor_1.height * dpi_multiplier
+		#dpi_multiplier = 2
+		#window_width = monitor_1.width * dpi_multiplier
+		#window_height = monitor_1.height * dpi_multiplier
+		window_width = 1920
+		window_height = 1080
 		window_ratio = window_width / window_height
 		Window.size = (window_width, window_height)
 
