@@ -714,22 +714,22 @@ def get_widget_for_file(filepath, window_width, window_height):
 				scatter.add_widget(Image(color=background_color, size_hint=(1.0, 1.0)))
 			else:
 				# blur the image as the background
-				pil_image = PilImage.open(filepath)
-				try:
-					blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(50))
-				except ValueError:
-					blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(50))
-				data = BytesIO()
-				blurred_pil_image.save(data, format='png')
-				data.seek(0) # yes you actually need this
+				with PilImage.open(filepath) as pil_image:
+					try:
+						blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(50))
+					except ValueError:
+						blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(50))
+					data = BytesIO()
+					blurred_pil_image.save(data, format='png')
+					data.seek(0) # yes you actually need this
 
-				almost_blurred = CoreImage(BytesIO(data.read()), ext='png')
-				blurred = Image(size=(window_width, window_height), fit_mode='cover')
-				blurred.texture = almost_blurred.texture
-				scatter.add_widget(blurred)
+					almost_blurred = CoreImage(BytesIO(data.read()), ext='png')
+					blurred = Image(size=(window_width, window_height), fit_mode='cover')
+					blurred.texture = almost_blurred.texture
+					scatter.add_widget(blurred)
 
-				radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
-				scatter.add_widget(radial_gradient)
+					radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
+					scatter.add_widget(radial_gradient)
 
 		# image_widget = Image(texture=image.texture, size_hint=(1.0, 1.0))
 		# this mostly works, but it crops things slightly - maybe it's just a resolution thing and when going to 1920/1080 it'll be fixed?
@@ -1093,6 +1093,8 @@ print("ok")
 # either gifs or videos may not be looping properly
 # gallery should definitely use recycle grid
 # shoudl clear clocks whne going to settings and gallery
+# load new images a bit after the carousel has scrolled to the next image
+# gc/ensure that widgets have actually been removed... somehow
 
 # if unlocking on image, unzoom first before proceeding
 # reshuffle on returning to start - a bit more complicated here
