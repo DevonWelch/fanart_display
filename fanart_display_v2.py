@@ -1,5 +1,6 @@
 # from kivy import * 
 from copy import copy
+import gc
 import math
 import os
 from io import BytesIO
@@ -516,32 +517,36 @@ class FileCarousel(Carousel):
 		if value == 2 or self.num_files <= 5:
 			return
 
-		if value == 1:
-			print('here1')
-			self.true_index -= 1
-			if self.true_index < 0:
-				self.true_index = self.num_files + self.true_index
-			self.remove_widget(self.slides[4])
-			print('true index:', self.true_index )
-			new_widget = get_widget_for_file(os.path.join(self.files_dir, self.file_list[self.index_two_left(self.true_index)]), self.window_width, self.window_height)
-			print('new widget:', new_widget)
-			# don't ask me why, but -1 adds it to the beginning of the slides
-			self.add_widget(new_widget, index=-1)
-		elif value == 3:
-			print('here2')
-			self.true_index += 1
-			if self.true_index >= self.num_files:
-				self.true_index -= self.num_files
-			print('removing widget:', self.slides[0])
-			print('true index:', self.true_index )
-			self.remove_widget(self.slides[0])
-			new_widget = get_widget_for_file(os.path.join(self.files_dir, self.file_list[self.index_two_right(self.true_index)]), self.window_width, self.window_height)
-			print('new widget:', new_widget)
-			print('adding at index:', self.true_index + 2)
-			# don't ask me why, but zero adds it to the end of the slides
-			self.add_widget(new_widget, index=0)
-		# self.index 
-		self.index = 2
+		def update_widgets(dt):
+			if value == 1:
+				print('here1')
+				self.true_index -= 1
+				if self.true_index < 0:
+					self.true_index = self.num_files + self.true_index
+				self.remove_widget(self.slides[4])
+				print('true index:', self.true_index )
+				new_widget = get_widget_for_file(os.path.join(self.files_dir, self.file_list[self.index_two_left(self.true_index)]), self.window_width, self.window_height)
+				print('new widget:', new_widget)
+				# don't ask me why, but -1 adds it to the beginning of the slides
+				self.add_widget(new_widget, index=-1)
+			elif value == 3:
+				print('here2')
+				self.true_index += 1
+				if self.true_index >= self.num_files:
+					self.true_index -= self.num_files
+				print('removing widget:', self.slides[0])
+				print('true index:', self.true_index )
+				self.remove_widget(self.slides[0])
+				new_widget = get_widget_for_file(os.path.join(self.files_dir, self.file_list[self.index_two_right(self.true_index)]), self.window_width, self.window_height)
+				print('new widget:', new_widget)
+				print('adding at index:', self.true_index + 2)
+				# don't ask me why, but zero adds it to the end of the slides
+				self.add_widget(new_widget, index=0)
+			# self.index 
+			self.index = 2
+			gc.collect()
+
+		Clock.schedule_once(update_widgets, 1)
 		# if len(self.slides) > 5:
 		# 	index_two_right = self.index_two_right()
 		# 	# index_two_left = self.index_two_left()
@@ -693,10 +698,10 @@ def get_widget_for_file(filepath, window_width, window_height):
 		widget = Image(source=filepath, fit_mode='contain', anim_delay=anim_delay)
 	else:
 		if filename in PIXEL_FILES:
-			image = CoreImage(filepath, keep_data=True)
+			image = CoreImage(filepath, keep_data=True, nocache=True)
 			image.texture.mag_filter = 'nearest'
 		else:
-			image = CoreImage(filepath, keep_data=True)
+			image = CoreImage(filepath, keep_data=True, nocache=True)
 		scatter = CustomScatterLayout(do_rotation=False, scale_min=1)
 		scatter.size = (window_width, window_height)
 
@@ -723,7 +728,7 @@ def get_widget_for_file(filepath, window_width, window_height):
 					blurred_pil_image.save(data, format='png')
 					data.seek(0) # yes you actually need this
 
-					almost_blurred = CoreImage(BytesIO(data.read()), ext='png')
+					almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
 					blurred = Image(size=(window_width, window_height), fit_mode='cover')
 					blurred.texture = almost_blurred.texture
 					scatter.add_widget(blurred)
