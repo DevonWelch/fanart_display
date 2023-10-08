@@ -515,6 +515,17 @@ class FileCarousel(Carousel):
 		enqueue_slide_advance()
 
 		if value == 2 or self.num_files <= 5:
+			if value == 2:
+				if isinstance(self.slides[value-1], Video):
+					# print("it's a video")
+					# self.slides[value].position = 0
+					if self.slides[value-1].state != "stop":
+						self.slides[value-1].state = "stop"
+				if isinstance(self.slides[value+1], Video):
+					# print("it's a video")
+					# self.slides[value].position = 0
+					if self.slides[value+1].state != "stop":
+						self.slides[value+1].state = "stop"
 			return
 
 		def update_widgets(dt):
@@ -524,11 +535,13 @@ class FileCarousel(Carousel):
 				if self.true_index < 0:
 					self.true_index = self.num_files + self.true_index
 				self.remove_widget(self.slides[4])
+				deleted_widget = self.slides[4]
 				print('true index:', self.true_index )
 				new_widget = get_widget_for_file(os.path.join(self.files_dir, self.file_list[self.index_two_left(self.true_index)]), self.window_width, self.window_height)
 				print('new widget:', new_widget)
 				# don't ask me why, but -1 adds it to the beginning of the slides
 				self.add_widget(new_widget, index=-1)
+				del deleted_widget
 			elif value == 3:
 				print('here2')
 				self.true_index += 1
@@ -536,17 +549,20 @@ class FileCarousel(Carousel):
 					self.true_index -= self.num_files
 				print('removing widget:', self.slides[0])
 				print('true index:', self.true_index )
+				deleted_widget = self.slides[0]
 				self.remove_widget(self.slides[0])
 				new_widget = get_widget_for_file(os.path.join(self.files_dir, self.file_list[self.index_two_right(self.true_index)]), self.window_width, self.window_height)
 				print('new widget:', new_widget)
 				print('adding at index:', self.true_index + 2)
 				# don't ask me why, but zero adds it to the end of the slides
 				self.add_widget(new_widget, index=0)
+				del deleted_widget
 			# self.index 
+			# del deleted_widget
 			self.index = 2
 			gc.collect()
 
-		Clock.schedule_once(update_widgets, 1)
+		Clock.schedule_once(update_widgets, 3)
 		# if len(self.slides) > 5:
 		# 	index_two_right = self.index_two_right()
 		# 	# index_two_left = self.index_two_left()
