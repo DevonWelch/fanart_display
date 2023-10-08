@@ -220,6 +220,12 @@ class RadialGradient(BoxLayout):
 # 		self.canvas['resolution'] = list(map(float, self.size))
 # 		print("pos changed")'''
 
+def free_stencil(stencil_view):
+	scatter = stencil_view.children[0]
+	for child in scatter.children:
+		del child
+	del scatter
+
 class CustomScatterLayout(ScatterLayout):
 	def __init__(self, **kwargs):
 		super(CustomScatterLayout, self).__init__(**kwargs)
@@ -534,13 +540,17 @@ class FileCarousel(Carousel):
 				self.true_index -= 1
 				if self.true_index < 0:
 					self.true_index = self.num_files + self.true_index
-				self.remove_widget(self.slides[4])
 				deleted_widget = self.slides[4]
+				self.remove_widget(self.slides[4])
 				print('true index:', self.true_index )
 				new_widget = get_widget_for_file(os.path.join(self.files_dir, self.file_list[self.index_two_left(self.true_index)]), self.window_width, self.window_height)
 				print('new widget:', new_widget)
 				# don't ask me why, but -1 adds it to the beginning of the slides
 				self.add_widget(new_widget, index=-1)
+				if isinstance(deleted_widget, Video):
+					deleted_widget.unload()
+				else:
+					free_stencil(deleted_widget)
 				del deleted_widget
 			elif value == 3:
 				print('here2')
@@ -556,6 +566,10 @@ class FileCarousel(Carousel):
 				print('adding at index:', self.true_index + 2)
 				# don't ask me why, but zero adds it to the end of the slides
 				self.add_widget(new_widget, index=0)
+				if isinstance(deleted_widget, Video):
+					deleted_widget.unload()
+				else:
+					free_stencil(deleted_widget)
 				del deleted_widget
 			# self.index 
 			# del deleted_widget
@@ -711,7 +725,7 @@ def get_widget_for_file(filepath, window_width, window_height):
 		# video.loaded = True
 	elif ext == '.gif':
 		anim_delay = 0.04 if filename in ['cannonbreed1576816909458149376_1.gif', 'cannonbreed1603175701049327616_1.gif'] else 0.1
-		widget = Image(source=filepath, fit_mode='contain', anim_delay=anim_delay)
+		widget = Image(source=filepath, fit_mode='contain', anim_delay=anim_delay, nocache=True)
 	else:
 		if filename in PIXEL_FILES:
 			image = CoreImage(filepath, keep_data=True, nocache=True)
@@ -732,7 +746,7 @@ def get_widget_for_file(filepath, window_width, window_height):
 			# image does not have transparent edges, so apply a backgorund
 			background_color = get_background_color(pixel_1, pixel_2, pixel_3, pixel_4)
 			if background_color is not None:
-				scatter.add_widget(Image(color=background_color, size_hint=(1.0, 1.0)))
+				scatter.add_widget(Image(color=background_color, size_hint=(1.0, 1.0), nocache=True))
 			else:
 				# blur the image as the background
 				with PilImage.open(filepath) as pil_image:
@@ -745,16 +759,19 @@ def get_widget_for_file(filepath, window_width, window_height):
 					data.seek(0) # yes you actually need this
 
 					almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
-					blurred = Image(size=(window_width, window_height), fit_mode='cover')
+					blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
 					blurred.texture = almost_blurred.texture
 					scatter.add_widget(blurred)
 
 					radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
 					scatter.add_widget(radial_gradient)
 
+					del almost_blurred
+					del blurred_pil_image
+
 		# image_widget = Image(texture=image.texture, size_hint=(1.0, 1.0))
 		# this mostly works, but it crops things slightly - maybe it's just a resolution thing and when going to 1920/1080 it'll be fixed?
-		image_widget = Image(texture=image.texture, fit_mode='contain')
+		image_widget = Image(texture=image.texture, fit_mode='contain', nocache=True)
 		scatter.add_widget(image_widget)
 
 		# stencil crops the display so it doesn't bleed onto other slides
