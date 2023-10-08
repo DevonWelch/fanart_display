@@ -735,44 +735,50 @@ def get_widget_for_file(filepath, window_width, window_height):
 		scatter = CustomScatterLayout(do_rotation=False, scale_min=1)
 		scatter.size = (window_width, window_height)
 
-		pixel_1 = image.read_pixel(0, 0)
-		pixel_2 = image.read_pixel(0, image.texture.size[1] - 1)
-		pixel_3 = image.read_pixel(image.texture.size[0] - 1, 0)
-		pixel_4 = image.read_pixel(image.texture.size[0] - 1, image.texture.size[1] - 1)
+		# only need to create a background if the entire window isn't covered
+		if image.height / image.width != window_height / window_width:
+			pixel_1 = image.read_pixel(0, 0)
+			pixel_2 = image.read_pixel(0, image.texture.size[1] - 1)
+			pixel_3 = image.read_pixel(image.texture.size[0] - 1, 0)
+			pixel_4 = image.read_pixel(image.texture.size[0] - 1, image.texture.size[1] - 1)
 
-		print(pixel_1, pixel_2, pixel_3, pixel_4)
+			print(pixel_1, pixel_2, pixel_3, pixel_4)
 
-		if not (pixel_is_transparent(pixel_1) and pixel_is_transparent(pixel_2) and pixel_is_transparent(pixel_3) and pixel_is_transparent(pixel_4)):
-			# image does not have transparent edges, so apply a backgorund
-			background_color = get_background_color(pixel_1, pixel_2, pixel_3, pixel_4)
-			if background_color is not None:
-				scatter.add_widget(Image(color=background_color, size_hint=(1.0, 1.0), nocache=True))
-			else:
-				# blur the image as the background
-				with PilImage.open(filepath) as pil_image:
-					try:
-						blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(50))
-					except ValueError:
-						blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(50))
-					data = BytesIO()
-					blurred_pil_image.save(data, format='png')
-					data.seek(0) # yes you actually need this
+			if not (pixel_is_transparent(pixel_1) and pixel_is_transparent(pixel_2) and pixel_is_transparent(pixel_3) and pixel_is_transparent(pixel_4)):
+				# image does not have transparent edges, so apply a background
+				background_color = get_background_color(pixel_1, pixel_2, pixel_3, pixel_4)
+				if background_color is not None:
+					scatter.add_widget(Image(color=background_color, size_hint=(1.0, 1.0), nocache=True))
+				else:
+					# blur the image as the background
+					with PilImage.open(filepath) as pil_image:
+						try:
+							blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(50))
+						except ValueError:
+							blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(50))
+						data = BytesIO()
+						blurred_pil_image.save(data, format='png')
+						data.seek(0) # yes you actually need this
 
-					almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
-					blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
-					blurred.texture = almost_blurred.texture
-					scatter.add_widget(blurred)
+						almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
+						blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
+						blurred.texture = almost_blurred.texture
+						scatter.add_widget(blurred)
 
-					radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
-					scatter.add_widget(radial_gradient)
+						radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
+						scatter.add_widget(radial_gradient)
 
-					del almost_blurred
-					del blurred_pil_image
+						del almost_blurred
+						del blurred_pil_image
+						del data
+						del pil_image
 
 		# image_widget = Image(texture=image.texture, size_hint=(1.0, 1.0))
 		# this mostly works, but it crops things slightly - maybe it's just a resolution thing and when going to 1920/1080 it'll be fixed?
 		image_widget = Image(texture=image.texture, fit_mode='contain', nocache=True)
 		scatter.add_widget(image_widget)
+
+		del image
 
 		# stencil crops the display so it doesn't bleed onto other slides
 		stencil = StencilView(size_hint=(1.0, 1.0))
