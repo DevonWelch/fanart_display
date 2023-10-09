@@ -521,17 +521,17 @@ class FileCarousel(Carousel):
 		enqueue_slide_advance()
 
 		if value == 2 or self.num_files <= 5:
-			if value == 2:
-				if isinstance(self.slides[value-1], Video):
-					# print("it's a video")
-					# self.slides[value].position = 0
-					if self.slides[value-1].state != "stop":
-						self.slides[value-1].state = "stop"
-				if isinstance(self.slides[value+1], Video):
-					# print("it's a video")
-					# self.slides[value].position = 0
-					if self.slides[value+1].state != "stop":
-						self.slides[value+1].state = "stop"
+			# if value == 2:
+			# 	if isinstance(self.slides[value-1], Video):
+			# 		# print("it's a video")
+			# 		# self.slides[value].position = 0
+			# 		if self.slides[value-1].state != "stop":
+			# 			self.slides[value-1].state = "stop"
+			# 	if isinstance(self.slides[value+1], Video):
+			# 		# print("it's a video")
+			# 		# self.slides[value].position = 0
+			# 		if self.slides[value+1].state != "stop":
+			# 			self.slides[value+1].state = "stop"
 			return
 
 		def update_widgets(dt):
