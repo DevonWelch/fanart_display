@@ -1,0 +1,17 @@
+[Unit]
+Description=Fanart Display Service
+StartLimitIntervalSec=0
+RuntimeMaxSec=1d
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=devon
+ExecStart=/home/devon/fanart_dsiplay/bin/start_display.sh
+
+[Install]
+WantedBy=multi-user.target
+
+# to install:
+# systemctl start run_display.service
+# systemctl enable run_display.service
