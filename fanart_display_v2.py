@@ -1,6 +1,7 @@
 # from kivy import * 
 from copy import copy
 import gc
+import json
 import math
 import os
 from io import BytesIO
@@ -47,9 +48,13 @@ RESET_ZOOM_EVENT = None
 CLOSE_NAV_TIMEOUT = None
 LOCKED = False
 
+PERFORMANT_MODE = True
+
 CURRENT_SETTINGS = None
 
 PIXEL_FILES = ['MakDeetsMuch1645881808448536576.png', 'child0.png', 'child1.png', 'KadaburaDraws1566865598193319938.png']
+FILES_DIR = '../fanart'
+SETTINGS_FILE = f'{FILES_DIR}/settings.json'
 
 CONFIG = ConfigParser()
 # try:
@@ -126,7 +131,7 @@ def clear_slide_advance():
 		Clock.unschedule(SLIDE_ADVANCE_EVENT)
 		SLIDE_ADVANCE_EVENT = None
 
-def enqueue_slide_advance(duration=SLIDE_DURATION):
+def enqueue_slide_advance(duration=int(CONFIG.get('general', 'slide_duration'))):
 	global SLIDE_ADVANCE_EVENT
 	if SLIDE_ADVANCE_EVENT is not None:
 		Clock.unschedule(SLIDE_ADVANCE_EVENT)
@@ -244,12 +249,12 @@ class CustomScatterLayout(ScatterLayout):
 		def reset_zoom(dt):
 			# scale should be whatever the initial scale is, which i don't think is necessarily 1.... although maybe it is?
 			print('animating')
-			anim = Animation(scale=1, duration=SLIDE_DURATION / 4) & Animation(x=0, duration=SLIDE_DURATION / 4) & Animation(y=0, duration=SLIDE_DURATION / 4)
+			anim = Animation(scale=1, duration=int(CONFIG.get('general', 'slide_duration')) / 4) & Animation(x=0, duration=int(CONFIG.get('general', 'slide_duration')) / 4) & Animation(y=0, duration=int(CONFIG.get('general', 'slide_duration')) / 4)
 			anim.start(self)
-			enqueue_slide_advance(SLIDE_DURATION / 2)
+			enqueue_slide_advance(int(CONFIG.get('general', 'slide_duration')) / 2)
 
 		global RESET_ZOOM_EVENT
-		RESET_ZOOM_EVENT = Clock.schedule_once(reset_zoom, SLIDE_DURATION / 2)
+		RESET_ZOOM_EVENT = Clock.schedule_once(reset_zoom, int(CONFIG.get('general', 'slide_duration')) / 2)
 		print('RESET_ZOOM_EVENT 1', RESET_ZOOM_EVENT)
 
 	# set temp lock
@@ -379,11 +384,12 @@ class WhiteBackgroundLayout(RelativeLayout):
 # 		''')
 
 class FileCarousel(Carousel):
-	def __init__(self, files_dir, window_width, window_height, **kwargs):
+	def __init__(self, files_dir, window_width, window_height, settings_file, **kwargs):
 		super(FileCarousel, self).__init__(**kwargs)
 		# self.file_list = file_list
 		# self.num_files = len(file_list)
 		self.files_dir = files_dir
+		self.init_settings(settings_file)
 		self.window_width = window_width
 		self.window_height = window_height
 		self.updating = False
@@ -403,6 +409,112 @@ class FileCarousel(Carousel):
 # 		# 	Color(1, 1, 1, 1)
 # 		# 	self.rect = Rectangle(pos=self.pos, size=self.size)
 
+	def init_settings(self, settings_file):
+		with open(settings_file, 'r') as settings_file:
+			self.file_settings = json.load(settings_file)
+		
+	def get_widget_for_file(self, filepath, window_width, window_height):
+		print(filepath)
+		_, ext = os.path.splitext(filepath)
+		filename = os.path.basename(filepath)
+		if ext == '.mp4':
+			widget = Video(source=filepath)
+			widget.position = 0
+			# self.slides[value].state = "play"
+			widget.options = {'eos': 'loop'}
+			widget.allow_stretch = True
+			widget.loaded = True
+			# video.state = "play"
+			# video.options = {'eos': 'loop'}
+			# video.allow_stretch = True
+			# video.loaded = True
+		elif ext == '.gif':
+			anim_delay = 0.04 if filename in ['cannonbreed1576816909458149376_1.gif', 'cannonbreed1603175701049327616_1.gif'] else 0.1
+			widget = Image(source=filepath, fit_mode='contain', anim_delay=anim_delay, nocache=True)
+		else:
+			# if filename in PIXEL_FILES:
+			if self.file_settings.get(filename, {}).get('is_pixel', False):
+				image = CoreImage(filepath, keep_data=True, nocache=True)
+				image.texture.mag_filter = 'nearest'
+			else:
+				image = CoreImage(filepath, keep_data=True, nocache=True)
+
+			if PERFORMANT_MODE:
+				parent = CustomScatterLayout(do_rotation=False, scale_min=1)
+			else:
+				parent = WhiteBackgroundLayout()
+				# parent = 
+
+			parent.size = (window_width, window_height)
+
+			# only need to create a background if the entire window isn't covered
+			if not PERFORMANT_MODE and image.height / image.width != window_height / window_width:
+				force_blur = self.file_settings.get(filename, {}).get('background', '') == 'b'
+
+				# if force_blur:
+
+				if not force_blur:
+					pixel_1 = image.read_pixel(0, 0)
+					pixel_2 = image.read_pixel(0, image.texture.size[1] - 1)
+					pixel_3 = image.read_pixel(image.texture.size[0] - 1, 0)
+					pixel_4 = image.read_pixel(image.texture.size[0] - 1, image.texture.size[1] - 1)
+
+				print(pixel_1, pixel_2, pixel_3, pixel_4)
+
+				if force_blur or (not (pixel_is_transparent(pixel_1) and pixel_is_transparent(pixel_2) and pixel_is_transparent(pixel_3) and pixel_is_transparent(pixel_4))):
+					# image does not have transparent edges, so apply a background
+					if not force_blur:
+						background_color = get_background_color(pixel_1, pixel_2, pixel_3, pixel_4)
+					if not force_blur and background_color is not None:
+						parent.add_widget(Image(color=background_color, size_hint=(1.0, 1.0), nocache=True))
+					else:
+						# blur the image as the background
+						with PilImage.open(filepath) as pil_image:
+							try:
+								blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(50))
+							except ValueError:
+								blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(50))
+							data = BytesIO()
+							blurred_pil_image.save(data, format='png')
+							data.seek(0) # yes you actually need this
+
+							almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
+							blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
+							blurred.texture = almost_blurred.texture
+							parent.add_widget(blurred)
+
+							radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
+							parent.add_widget(radial_gradient)
+
+							del almost_blurred
+							del blurred_pil_image
+							del data
+							del pil_image
+
+			# image_widget = Image(texture=image.texture, size_hint=(1.0, 1.0))
+			# this mostly works, but it crops things slightly - maybe it's just a resolution thing and when going to 1920/1080 it'll be fixed?
+			image_widget = Image(texture=image.texture, fit_mode='contain', nocache=True)
+
+			if orientation := self.file_settings.get(filename, {}).get('orientation', False):
+				if orientation == 'l':
+					image_widget.pos_hint = {'left': 0}
+				elif orientation == 'r':
+					image_widget.pos_hint = {'right': 0}
+					
+			parent.add_widget(image_widget)
+
+			del image
+
+			if PERFORMANT_MODE:
+				widget = parent
+			else:
+				# stencil crops the display so it doesn't bleed onto other slides
+				stencil = StencilView(size_hint=(1.0, 1.0))
+				stencil.add_widget(parent)
+				widget = stencil
+
+		return widget
+
 	def apply_config(self):
 		self.applying_config = True
 		self.clear_widgets()
@@ -416,7 +528,7 @@ class FileCarousel(Carousel):
 		] for item in sublist]
 		files = [f for f in os.listdir(self.files_dir) if f != '.DS_Store' and os.path.splitext(f)[1] in acceptable_extensions]
 		if CONFIG.get('general', 'only_pixel_art') != '0':
-			files = [f for f in files if f in PIXEL_FILES]
+			files = [f for f in files if self.file_settings.get(f, {}).get('is_pixel', False)]
 		shuffle(files)
 
 		self.file_list = files
@@ -430,7 +542,7 @@ class FileCarousel(Carousel):
 				# widget = CAROUSEL.placeholder_widget()
 				continue
 			else:
-				widget = get_widget_for_file(os.path.join(self.files_dir, file), self.window_width, self.window_height)
+				widget = self.get_widget_for_file(os.path.join(self.files_dir, file), self.window_width, self.window_height)
 
 			print(file, widget, i)
 
@@ -483,7 +595,7 @@ class FileCarousel(Carousel):
 
 	def clear_index(self, index):
 		widget_to_remove = self.slides[index]
-		self.add_widget(get_widget_for_file(os.path.join(self.files_dir, self.file_list[index]), self.window_width, self.window_height), index=index)
+		self.add_widget(self.get_widget_for_file(os.path.join(self.files_dir, self.file_list[index]), self.window_width, self.window_height), index=index)
 		self.remove_widget(widget_to_remove)
 
 	def populate_index(self, index):
@@ -543,7 +655,7 @@ class FileCarousel(Carousel):
 				deleted_widget = self.slides[4]
 				self.remove_widget(self.slides[4])
 				print('true index:', self.true_index )
-				new_widget = get_widget_for_file(os.path.join(self.files_dir, self.file_list[self.index_two_left(self.true_index)]), self.window_width, self.window_height)
+				new_widget = self.get_widget_for_file(os.path.join(self.files_dir, self.file_list[self.index_two_left(self.true_index)]), self.window_width, self.window_height)
 				print('new widget:', new_widget)
 				# don't ask me why, but -1 adds it to the beginning of the slides
 				self.add_widget(new_widget, index=-1)
@@ -561,7 +673,7 @@ class FileCarousel(Carousel):
 				print('true index:', self.true_index )
 				deleted_widget = self.slides[0]
 				self.remove_widget(self.slides[0])
-				new_widget = get_widget_for_file(os.path.join(self.files_dir, self.file_list[self.index_two_right(self.true_index)]), self.window_width, self.window_height)
+				new_widget = self.get_widget_for_file(os.path.join(self.files_dir, self.file_list[self.index_two_right(self.true_index)]), self.window_width, self.window_height)
 				print('new widget:', new_widget)
 				print('adding at index:', self.true_index + 2)
 				# don't ask me why, but zero adds it to the end of the slides
@@ -620,7 +732,7 @@ class FileCarousel(Carousel):
 			self.is_moving = True
 
 	def on_touch_up(self, event, **kwargs):
-		if not self.is_moving:
+		if not self.is_moving and not PERFORMANT_MODE:
 			global NAV
 			print(NAV.visible)
 			# NAV.visible = not NAV.visible
@@ -707,85 +819,6 @@ def get_background_color(pixel_1, pixel_2, pixel_3, pixel_4):
 
 def pixel_is_transparent(pixel):
 	return len(pixel) == 4 and pixel[3] == 0
-
-def get_widget_for_file(filepath, window_width, window_height):
-	print(filepath)
-	_, ext = os.path.splitext(filepath)
-	filename = os.path.basename(filepath)
-	if ext == '.mp4':
-		widget = Video(source=filepath)
-		widget.position = 0
-		# self.slides[value].state = "play"
-		widget.options = {'eos': 'loop'}
-		widget.allow_stretch = True
-		widget.loaded = True
-		# video.state = "play"
-		# video.options = {'eos': 'loop'}
-		# video.allow_stretch = True
-		# video.loaded = True
-	elif ext == '.gif':
-		anim_delay = 0.04 if filename in ['cannonbreed1576816909458149376_1.gif', 'cannonbreed1603175701049327616_1.gif'] else 0.1
-		widget = Image(source=filepath, fit_mode='contain', anim_delay=anim_delay, nocache=True)
-	else:
-		if filename in PIXEL_FILES:
-			image = CoreImage(filepath, keep_data=True, nocache=True)
-			image.texture.mag_filter = 'nearest'
-		else:
-			image = CoreImage(filepath, keep_data=True, nocache=True)
-		scatter = CustomScatterLayout(do_rotation=False, scale_min=1)
-		scatter.size = (window_width, window_height)
-
-		# only need to create a background if the entire window isn't covered
-		if image.height / image.width != window_height / window_width:
-			pixel_1 = image.read_pixel(0, 0)
-			pixel_2 = image.read_pixel(0, image.texture.size[1] - 1)
-			pixel_3 = image.read_pixel(image.texture.size[0] - 1, 0)
-			pixel_4 = image.read_pixel(image.texture.size[0] - 1, image.texture.size[1] - 1)
-
-			print(pixel_1, pixel_2, pixel_3, pixel_4)
-
-			if not (pixel_is_transparent(pixel_1) and pixel_is_transparent(pixel_2) and pixel_is_transparent(pixel_3) and pixel_is_transparent(pixel_4)):
-				# image does not have transparent edges, so apply a background
-				background_color = get_background_color(pixel_1, pixel_2, pixel_3, pixel_4)
-				if background_color is not None:
-					scatter.add_widget(Image(color=background_color, size_hint=(1.0, 1.0), nocache=True))
-				else:
-					# blur the image as the background
-					with PilImage.open(filepath) as pil_image:
-						try:
-							blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(50))
-						except ValueError:
-							blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(50))
-						data = BytesIO()
-						blurred_pil_image.save(data, format='png')
-						data.seek(0) # yes you actually need this
-
-						almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
-						blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
-						blurred.texture = almost_blurred.texture
-						scatter.add_widget(blurred)
-
-						radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
-						scatter.add_widget(radial_gradient)
-
-						del almost_blurred
-						del blurred_pil_image
-						del data
-						del pil_image
-
-		# image_widget = Image(texture=image.texture, size_hint=(1.0, 1.0))
-		# this mostly works, but it crops things slightly - maybe it's just a resolution thing and when going to 1920/1080 it'll be fixed?
-		image_widget = Image(texture=image.texture, fit_mode='contain', nocache=True)
-		scatter.add_widget(image_widget)
-
-		del image
-
-		# stencil crops the display so it doesn't bleed onto other slides
-		stencil = StencilView(size_hint=(1.0, 1.0))
-		stencil.add_widget(scatter)
-		widget = stencil
-
-	return widget
 
 class NavButtons(BoxLayout):
 	def __init__(self, **kwargs):
@@ -1035,7 +1068,7 @@ class MainApp(MDApp):
 		#window_height = monitor_1.height * dpi_multiplier
 		window_width = 1920
 		window_height = 1080
-		window_ratio = window_width / window_height
+		# window_ratio = window_width / window_height
 		Window.size = (window_width, window_height)
 
 		layout = WhiteBackgroundLayout()
@@ -1044,8 +1077,6 @@ class MainApp(MDApp):
 		# two potential solutons to memory issue -
 		# 1) switch to recycle view
 		# 2) only fully load close objects in carousel, and leave the rest as placeholders, then load/unload while scrolling
-
-		files_dir = '../fanart'
 
 		# acceptable_extensions = [item for sublist in [
 		# 	['.jpg', '.jpeg', '.png'] if CONFIG.get('general', 'display_images') else [],
@@ -1062,7 +1093,7 @@ class MainApp(MDApp):
 		# files = ['child0.png', 'child1.png', 'sovanjedi1607959631216709632_1.gif', 'KadaburaDraws1566865598193319938.png']
 
 		global CAROUSEL
-		CAROUSEL = FileCarousel(direction='right', loop=True, files_dir=files_dir, window_width=window_width, window_height=window_height)
+		CAROUSEL = FileCarousel(direction='right', loop=True, files_dir=FILES_DIR, window_width=window_width, settings_file=SETTINGS_FILE, window_height=window_height)
 		CAROUSEL.apply_config()
 
 		# for i, file in enumerate(files):
@@ -1087,13 +1118,14 @@ class MainApp(MDApp):
 
 		layout.add_widget(CAROUSEL)
 
-		global NAV
-		NAV = Nav()
+		if not PERFORMANT_MODE:
+			global NAV
+			NAV = Nav()
 
-		layout.add_widget(NAV)
+			layout.add_widget(NAV)
 
-		print(NAV)
-		# NAV.toggle_visibility()
+			print(NAV)
+			# NAV.toggle_visibility()
 
 		# return layout
 
@@ -1107,14 +1139,16 @@ class MainApp(MDApp):
 		# print(CONFIG._sections['general'])
 		# # print(CONFIG._dict)
 		# print(CONFIG['general'].__dict__)
-		settings_screen = Screen(name="settings")
-		settings_screen.add_widget(CustomSettings())
+		if not PERFORMANT_MODE:
+			settings_screen = Screen(name="settings")
+			settings_screen.add_widget(CustomSettings())
 
-		gallery_screen = Screen(name="gallery")
+			gallery_screen = Screen(name="gallery")
 
 		MANAGER.add_widget(carousel_screen)
-		MANAGER.add_widget(settings_screen)
-		MANAGER.add_widget(gallery_screen)
+		if not PERFORMANT_MODE:
+			MANAGER.add_widget(settings_screen)
+			MANAGER.add_widget(gallery_screen)
 
 		return MANAGER
 
