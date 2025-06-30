@@ -5,10 +5,12 @@ PIDFILE="$HOME/tmp/run_display.pid"
 
 if [ -e "${PIDFILE}" ] && (ps -u $(whoami) -opid= |
                            grep -P "^\s*$(cat ${PIDFILE})$" &> /dev/null); then
-  if ps -o etimes= -p "$$" > 86400; then
+  time_running=$(ps -o etimes= -p "$(cat ${PIDFILE})")
+  # if ps -o etimes= -p "$(cat ${PIDFILE})" > 86400; then
+  if [ "$time_running" -gt 86400 ]; then
     echo "Process has been running for more than 24 hours, restarting."
-    rm -f "${PIDFILE}"
     kill -9 $(cat "${PIDFILE}") &> /dev/null
+    rm -f "${PIDFILE}"
   else
     echo "Already running."
     exit 99

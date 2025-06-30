@@ -448,7 +448,8 @@ class FileCarousel(Carousel):
 			parent.size = (window_width, window_height)
 
 			# only need to create a background if the entire window isn't covered
-			if not PERFORMANT_MODE and image.height / image.width != window_height / window_width:
+			# if not PERFORMANT_MODE and image.height / image.width != window_height / window_width:
+			if image.height / image.width != window_height / window_width:
 				force_blur = self.file_settings.get(filename, {}).get('background', '') == 'b'
 
 				# if force_blur:
