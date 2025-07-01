@@ -190,6 +190,7 @@ def newer_blur(parent, base_filepath, window_width, window_height):
 	if not os.path.exists(blurred_dir):
 		return
 	filepath = os.path.join(blurred_dir, f'{filename}.jpg')
+	print('blurred filepath:', filepath)
 	image = CoreImage(os.path.basename(filepath), keep_data=True, nocache=True)
 	parent.add_widget(Image(texture=image.texture, size=(window_width, window_height), fit_mode='cover', nocache=True))
 
