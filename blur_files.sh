@@ -15,7 +15,7 @@ for file in $SCRIPT_DIR/../fanart/*; do
         xbase=${file##*/}
         # xfext=${xbase##*.}
         xpref=${xbase%.*}
-        dest_path="$SCRIPT_DIR/../fanart/blurred/${xpref##*/}"
+        dest_path="$SCRIPT_DIR/../fanart/blurred/${xpref}.jpg"
         # if it doesn't exist already, convert it
         echo "$dest_path"
         if [ ! -f "$dest_path" ]; then
