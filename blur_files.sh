@@ -15,9 +15,13 @@ for file in $SCRIPT_DIR/../fanart/*; do
         xbase=${file##*/}
         # xfext=${xbase##*.}
         xpref=${xbase%.*}
+        dest_path="$SCRIPT_DIR/blurred/${xpref##*/}"
+        # if it doesn't exist already, convert it
         echo "$SCRIPT_DIR/blurred/${xpref##*/}"
-        echo "convert -scale 10% -blur 0x2.5 -resize 1000% "$file" "$SCRIPT_DIR/blurred/${xpref##*/}""
-        convert -scale 10% -blur 0x2.5 -resize 1000% "$file" "$SCRIPT_DIR/blurred/${xpref##*/}"
+        if [ ! -f "$dest_path" ]; then
+            echo "convert -scale 10% -blur 0x2.5 -resize 1000% "$file" "$SCRIPT_DIR/blurred/${xpref##*/}""
+            convert -scale 10% -blur 0x2.5 -resize 1000% "$file" "$SCRIPT_DIR/blurred/${xpref##*/}"
+        fi
     fi
 done
 

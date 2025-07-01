@@ -143,6 +143,56 @@ def clear_reset_zoom():
 		Clock.unschedule(RESET_ZOOM_EVENT)
 		RESET_ZOOM_EVENT = None
 
+def old_blur(parent, filepath, window_width, window_height):
+	# not performant; this seems to be a large/the lain cuase of stuttering
+	with PilImage.open(filepath) as pil_image:
+		try:
+			blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(70))
+		except ValueError:
+			blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(70))
+		data = BytesIO()
+		blurred_pil_image.save(data, format='png')
+		data.seek(0) # yes you actually need this
+
+		almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
+		# blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
+		blurred = Image(size=(window_width, window_height), fit_mode='fill', nocache=True)
+		blurred.texture = almost_blurred.texture
+		parent.add_widget(blurred)
+
+		radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
+		parent.add_widget(radial_gradient)
+
+		del almost_blurred
+		del blurred_pil_image
+		del data
+
+	del pil_image
+
+def new_blur(parent, filepath, window_width, window_height, image):
+	# right i forgot... the out of the box blur looks bad. it chunks it 
+	# so it looks like a pixelated mess. so we have to do it ourselves.
+	# for all i know it could also be slow.
+	# alternatively, i could precalculate the blurred images...
+	print('adding new blur')
+	w = EffectWidget()
+	w.add_widget(Image(texture=image.texture, size=(window_width, window_height), fit_mode='fill', nocache=True))
+	w.effects = [HorizontalBlurEffect(size=window_width), VerticalBlurEffect(size=window_height)]
+	w.size = (window_width, window_height)
+
+	print(w)
+	parent.add_widget(w)
+
+def newer_blur(parent, base_filepath, window_width, window_height):
+	basename = os.path.basename(base_filepath)
+	filename = os.path.splitext(basename)[0]
+	blurred_dir = os.path.join(FILES_DIR, 'blurred')
+	if not os.path.exists(blurred_dir):
+		return
+	filepath = os.path.join(blurred_dir, f'{filename}.jpg')
+	image = CoreImage(os.path.basename(filepath), keep_data=True, nocache=True)
+	parent.add_widget(Image(texture=image.texture, size=(window_width, window_height), fit_mode='cover', nocache=True))
+
 class RadialGradient(BoxLayout):
 	def __init__(self, window_width, window_height, start_color, end_color):
 		super(RadialGradient, self).__init__()
@@ -470,27 +520,33 @@ class FileCarousel(Carousel):
 						parent.add_widget(Image(color=background_color, size_hint=(1.0, 1.0), nocache=True))
 					else:
 						# blur the image as the background
-						with PilImage.open(filepath) as pil_image:
-							try:
-								blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(50))
-							except ValueError:
-								blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(50))
-							data = BytesIO()
-							blurred_pil_image.save(data, format='png')
-							data.seek(0) # yes you actually need this
+						# old_blur(parent, filepath, window_width, window_height)
+						# new_blur(parent, filepath, window_width, window_height, image)
+						newer_blur(parent, filepath, window_width, window_height, image)
 
-							almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
-							blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
-							blurred.texture = almost_blurred.texture
-							parent.add_widget(blurred)
+						# with PilImage.open(filepath) as pil_image:
+						# 	try:
+						# 		blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(70))
+						# 	except ValueError:
+						# 		blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(70))
+						# 	data = BytesIO()
+						# 	blurred_pil_image.save(data, format='png')
+						# 	data.seek(0) # yes you actually need this
 
-							radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
-							parent.add_widget(radial_gradient)
+						# 	almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
+						# 	# blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
+						# 	blurred = Image(size=(window_width, window_height), fit_mode='fill', nocache=True)
+						# 	blurred.texture = almost_blurred.texture
+						# 	parent.add_widget(blurred)
 
-							del almost_blurred
-							del blurred_pil_image
-							del data
-							del pil_image
+						# 	radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
+						# 	parent.add_widget(radial_gradient)
+
+						# 	del almost_blurred
+						# 	del blurred_pil_image
+						# 	del data
+
+						# del pil_image
 
 			# image_widget = Image(texture=image.texture, size_hint=(1.0, 1.0))
 			# this mostly works, but it crops things slightly - maybe it's just a resolution thing and when going to 1920/1080 it'll be fixed?
@@ -527,7 +583,7 @@ class FileCarousel(Carousel):
 			['.mp4'] if CONFIG.get('general', 'display_videos') != '0' else [],
 			['.gif'] if CONFIG.get('general', 'display_gifs') != '0' else [],
 		] for item in sublist]
-		files = [f for f in os.listdir(self.files_dir) if f != '.DS_Store' and os.path.splitext(f)[1] in acceptable_extensions]
+		files = [f for f in os.listdir(self.files_dir) if f != '.DS_Store' and f != 'blurred' and os.p ath.splitext(f)[1] in acceptable_extensions]
 		if CONFIG.get('general', 'only_pixel_art') != '0':
 			files = [f for f in files if self.file_settings.get(f, {}).get('is_pixel', False)]
 		shuffle(files)
