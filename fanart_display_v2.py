@@ -583,7 +583,7 @@ class FileCarousel(Carousel):
 			['.mp4'] if CONFIG.get('general', 'display_videos') != '0' else [],
 			['.gif'] if CONFIG.get('general', 'display_gifs') != '0' else [],
 		] for item in sublist]
-		files = [f for f in os.listdir(self.files_dir) if f != '.DS_Store' and f != 'blurred' and os.p ath.splitext(f)[1] in acceptable_extensions]
+		files = [f for f in os.listdir(self.files_dir) if f != '.DS_Store' and f != 'blurred' and os.path.splitext(f)[1] in acceptable_extensions]
 		if CONFIG.get('general', 'only_pixel_art') != '0':
 			files = [f for f in files if self.file_settings.get(f, {}).get('is_pixel', False)]
 		shuffle(files)
