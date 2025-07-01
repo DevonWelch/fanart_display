@@ -522,7 +522,7 @@ class FileCarousel(Carousel):
 						# blur the image as the background
 						# old_blur(parent, filepath, window_width, window_height)
 						# new_blur(parent, filepath, window_width, window_height, image)
-						newer_blur(parent, filepath, window_width, window_height, image)
+						newer_blur(parent, filepath, window_width, window_height)
 
 						# with PilImage.open(filepath) as pil_image:
 						# 	try:
