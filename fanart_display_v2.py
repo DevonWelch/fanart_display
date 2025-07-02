@@ -33,9 +33,12 @@ from kivy.uix.stencilview import StencilView
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.settings import SettingsWithNoMenu, Settings
 from kivy.config import ConfigParser
+from kivy.uix.anchorlayout import AnchorLayout
 # from skimage import color as sk_color
 # import numpy as np
 from screeninfo import get_monitors
+from kivy.modules import inspector
+from kivy.uix.button import Button
 
 #ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -47,6 +50,7 @@ SLIDE_ADVANCE_EVENT = None
 RESET_ZOOM_EVENT = None
 CLOSE_NAV_TIMEOUT = None
 LOCKED = False
+DEBUG = False
 
 PERFORMANT_MODE = True
 
@@ -463,6 +467,8 @@ class FileCarousel(Carousel):
 	def init_settings(self, settings_file):
 		with open(settings_file, 'r') as settings_file:
 			self.file_settings = json.load(settings_file)
+
+		print(self.file_settings)
 		
 	def get_widget_for_file(self, filepath, window_width, window_height):
 		print(filepath)
@@ -493,30 +499,46 @@ class FileCarousel(Carousel):
 			if PERFORMANT_MODE:
 				parent = CustomScatterLayout(do_rotation=False, scale_min=1)
 			else:
-				parent = WhiteBackgroundLayout()
+				parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
+				# parent = AnchorLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
 				# parent = 
 
 			parent.size = (window_width, window_height)
+			orientation = self.file_settings.get(filename, {}).get('orientation', False)
 
 			# only need to create a background if the entire window isn't covered
 			# if not PERFORMANT_MODE and image.height / image.width != window_height / window_width:
 			if image.height / image.width != window_height / window_width:
+
 				force_blur = self.file_settings.get(filename, {}).get('background', '') == 'b'
 
 				# if force_blur:
 
 				if not force_blur:
-					pixel_1 = image.read_pixel(0, 0)
-					pixel_2 = image.read_pixel(0, image.texture.size[1] - 1)
-					pixel_3 = image.read_pixel(image.texture.size[0] - 1, 0)
-					pixel_4 = image.read_pixel(image.texture.size[0] - 1, image.texture.size[1] - 1)
+					if orientation and orientation == 'l':
+						pixels = [
+							image.read_pixel(image.texture.size[0] - 1, 0),
+							image.read_pixel(image.texture.size[0] - 1, image.texture.size[1] - 1),
+						]
+					elif orientation and orientation == 'r':
+						pixels = [
+							image.read_pixel(0, 0),
+							image.read_pixel(0, image.texture.size[1] - 1),
+						]
+					else:
+						pixels = [
+							image.read_pixel(0, 0),
+							image.read_pixel(0, image.texture.size[1] - 1),
+							image.read_pixel(image.texture.size[0] - 1, 0),
+							image.read_pixel(image.texture.size[0] - 1, image.texture.size[1] - 1),
+						]
 
-				print(pixel_1, pixel_2, pixel_3, pixel_4)
+				# print(pixel_1, pixel_2, pixel_3, pixel_4)
 
-				if force_blur or (not (pixel_is_transparent(pixel_1) and pixel_is_transparent(pixel_2) and pixel_is_transparent(pixel_3) and pixel_is_transparent(pixel_4))):
+				if force_blur or (not all_pixels_transparent(pixels)):
 					# image does not have transparent edges, so apply a background
 					if not force_blur:
-						background_color = get_background_color(pixel_1, pixel_2, pixel_3, pixel_4)
+						background_color = get_background_color(pixels)
 					if not force_blur and background_color is not None:
 						parent.add_widget(Image(color=background_color, size_hint=(1.0, 1.0), nocache=True))
 					else:
@@ -553,23 +575,47 @@ class FileCarousel(Carousel):
 			# this mostly works, but it crops things slightly - maybe it's just a resolution thing and when going to 1920/1080 it'll be fixed?
 			image_widget = Image(texture=image.texture, fit_mode='contain', nocache=True)
 
-			if orientation := self.file_settings.get(filename, {}).get('orientation', False):
+			if orientation:
+				actual_width = image.texture.size[0] * (window_height / image.texture.size[1]) if image.texture.size[1] > window_height else image.texture.size[0]
 				if orientation == 'l':
-					image_widget.pos_hint = {'left': 0}
+					# image_widget.pos_hint = {'left': 1}
+					# image_widget.pos_hint = {'x': -1}
+					# image_widget.pos_hint = {'x': -0.5}
+					# image_widget.pos = (0, 0)
+					# image_widget.pos = (0, 0)
+					# anchor = AnchorLayout(size_hint=(1.0, 1.0), size=(window_width, window_height), anchor_x='left', anchor_y='center')
+					# anchor.add_widget(image_widget)
+					# parent.add_widget(anchor)
+					image_widget.pos = (0 - (window_width - actual_width) / 2, 0)
 				elif orientation == 'r':
-					image_widget.pos_hint = {'right': 0}
-					
+					# image_widget.pos_hint = {'right': 1}
+					# image_widget.pos_hint = {'x': 1}
+					# image_widget.pos_hint = {'x': 0.5}
+					# print('image widget width:', image_widget.width, image.width)
+					image_widget.pos = ((window_width - actual_width) / 2, 0)
+					# anchor = AnchorLayout(size_hint=(1.0, 1.0), size=(window_width, window_height), anchor_x='right', anchor_y='center')
+					# image_widget.anchor_x = 'right'
+					# anchor.add_widget(image_widget)
+					# parent.add_widget(anchor)
+			
 			parent.add_widget(image_widget)
 
 			del image
 
-			if PERFORMANT_MODE:
-				widget = parent
-			else:
-				# stencil crops the display so it doesn't bleed onto other slides
-				stencil = StencilView(size_hint=(1.0, 1.0))
-				stencil.add_widget(parent)
-				widget = stencil
+			if DEBUG:
+				parent.add_widget(Label(text=f'{filename}', size_hint=(None, None), size=(200, 50), pos=(10, 10)))
+
+			# if PERFORMANT_MODE:
+			# 	widget = parent
+			# else:
+			# 	# stencil crops the display so it doesn't bleed onto other slides
+			# 	stencil = StencilView(size_hint=(1.0, 1.0))
+			# 	stencil.add_widget(parent)
+			# 	widget = stencil
+
+			stencil = StencilView(size_hint=(1.0, 1.0))
+			stencil.add_widget(parent)
+			widget = stencil
 
 		return widget
 
@@ -587,6 +633,8 @@ class FileCarousel(Carousel):
 		files = [f for f in os.listdir(self.files_dir) if f != '.DS_Store' and f != 'blurred' and os.path.splitext(f)[1] in acceptable_extensions]
 		if CONFIG.get('general', 'only_pixel_art') != '0':
 			files = [f for f in files if self.file_settings.get(f, {}).get('is_pixel', False)]
+
+		files = [f for f in files if self.file_settings.get(f, {}).get('orientation', False)]
 		shuffle(files)
 
 		self.file_list = files
@@ -829,21 +877,27 @@ def average_color(color_list):
 
 	return [r / num_colors, g / num_colors, b / num_colors]
 
-def get_background_color(pixel_1, pixel_2, pixel_3, pixel_4):
-	if pixel_1 == pixel_2 and pixel_1 == pixel_3 and pixel_1 == pixel_4:
-		# just check this early to avoid extra processing
-		print('here3')
-		return pixel_1
+def get_background_color(pixels):
+	all_same = True
+	for pixel in pixels[1:]:
+		if pixel != pixels[0]:
+			all_same = False
+			break
+
+	if all_same:
+		return pixels[0]
 
 	cutoff = 0.2
+	
+	rgb_pixels = [simple_rgba_to_rgb(pixel) for pixel in pixels]
 
-	rgb_1 = simple_rgba_to_rgb(pixel_1)
-	rgb_2 = simple_rgba_to_rgb(pixel_2)
-	rgb_3 = simple_rgba_to_rgb(pixel_3)
-	rgb_4 = simple_rgba_to_rgb(pixel_4)
-
-	if euclidean_distance(rgb_1, rgb_4) <= cutoff and euclidean_distance(rgb_1, rgb_2) <= cutoff and euclidean_distance(rgb_1, rgb_3) <= cutoff and euclidean_distance(rgb_3, rgb_4) <= cutoff:
-		return average_color([rgb_1, rgb_2, rgb_3, rgb_4])
+	if len(rgb_pixels) == 2:
+		if euclidean_distance(rgb_pixels[0], rgb_pixels[1]) <= cutoff:
+			return average_color(rgb_pixels)
+	else:
+		rgb_1, rgb_2, rgb_3, rgb_4 = rgb_pixels
+		if euclidean_distance(rgb_1, rgb_4) <= cutoff and euclidean_distance(rgb_1, rgb_2) <= cutoff and euclidean_distance(rgb_1, rgb_3) <= cutoff and euclidean_distance(rgb_3, rgb_4) <= cutoff:
+			return average_color([rgb_1, rgb_2, rgb_3, rgb_4])
 	
 	return None
 
@@ -877,6 +931,13 @@ def get_background_color(pixel_1, pixel_2, pixel_3, pixel_4):
 
 def pixel_is_transparent(pixel):
 	return len(pixel) == 4 and pixel[3] == 0
+
+def all_pixels_transparent(pixels):
+	for pixel in pixels:
+		if not pixel_is_transparent(pixel):
+			return False
+		
+	return True
 
 class NavButtons(BoxLayout):
 	def __init__(self, **kwargs):
@@ -1207,6 +1268,10 @@ class MainApp(MDApp):
 		if not PERFORMANT_MODE:
 			MANAGER.add_widget(settings_screen)
 			MANAGER.add_widget(gallery_screen)
+
+		# if DEBUG:
+		# 	button = Button(text="Test")
+		# 	inspector.create_inspector(Window, button)
 
 		return MANAGER
 
