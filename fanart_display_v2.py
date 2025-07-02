@@ -634,7 +634,6 @@ class FileCarousel(Carousel):
 		if CONFIG.get('general', 'only_pixel_art') != '0':
 			files = [f for f in files if self.file_settings.get(f, {}).get('is_pixel', False)]
 
-		files = [f for f in files if self.file_settings.get(f, {}).get('orientation', False)]
 		shuffle(files)
 
 		self.file_list = files
