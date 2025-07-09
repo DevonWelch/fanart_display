@@ -6,6 +6,7 @@ import math
 import os
 from io import BytesIO
 from random import shuffle
+import cv2
 
 #os.environ['KIVY_IMAGE'] = 'pil'
 
@@ -187,16 +188,16 @@ def new_blur(parent, filepath, window_width, window_height, image):
 	print(w)
 	parent.add_widget(w)
 
-def newer_blur(parent, base_filepath, window_width, window_height):
-	basename = os.path.basename(base_filepath)
-	filename = os.path.splitext(basename)[0]
+def newer_blur(filename, window_width, window_height):
+	filename = os.path.splitext(filename)[0]
 	blurred_dir = os.path.join(FILES_DIR, 'blurred')
 	if not os.path.exists(blurred_dir):
 		return
 	filepath = os.path.join(blurred_dir, f'{filename}.jpg')
+	# print(filepath)
 	print('blurred filepath:', filepath)
 	image = CoreImage(filepath, keep_data=True, nocache=True)
-	parent.add_widget(Image(texture=image.texture, size=(window_width, window_height), fit_mode='cover', nocache=True))
+	return Image(texture=image.texture, size=(window_width, window_height), fit_mode='cover', nocache=True)
 
 class RadialGradient(BoxLayout):
 	def __init__(self, window_width, window_height, start_color, end_color):
@@ -279,6 +280,41 @@ class RadialGradient(BoxLayout):
 # 		self.canvas['modelview_mat'] = Window.render_context['modelview_mat']
 # 		self.canvas['resolution'] = list(map(float, self.size))
 # 		print("pos changed")'''
+
+def get_forced_background(file_settings, filename, window_width, window_height):
+	forced_background = file_settings.get(filename, {}).get('background', '')
+
+	if forced_background is None or forced_background == '':
+		return None
+
+	if forced_background == 'b':
+		return newer_blur(filename, window_width, window_height)
+	elif is_hex(forced_background):
+		color = hex_to_color(forced_background)
+		return Image(color=color, size_hint=(1.0, 1.0), nocache=True)
+
+def align(widget, orientation, width, height, window_width, window_height):
+	actual_width = width * (window_height / height) if height > window_height else width
+	if orientation == 'l':
+		# image_widget.pos_hint = {'left': 1}
+		# image_widget.pos_hint = {'x': -1}
+		# image_widget.pos_hint = {'x': -0.5}
+		# image_widget.pos = (0, 0)
+		# image_widget.pos = (0, 0)
+		# anchor = AnchorLayout(size_hint=(1.0, 1.0), size=(window_width, window_height), anchor_x='left', anchor_y='center')
+		# anchor.add_widget(image_widget)
+		# parent.add_widget(anchor)
+		widget.pos = (0 - (window_width - actual_width) / 2, 0)
+	elif orientation == 'r':
+		# image_widget.pos_hint = {'right': 1}
+		# image_widget.pos_hint = {'x': 1}
+		# image_widget.pos_hint = {'x': 0.5}
+		# print('image widget width:', image_widget.width, image.width)
+		widget.pos = ((window_width - actual_width) / 2, 0)
+		# anchor = AnchorLayout(size_hint=(1.0, 1.0), size=(window_width, window_height), anchor_x='right', anchor_y='center')
+		# image_widget.anchor_x = 'right'
+		# anchor.add_widget(image_widget)
+		# parent.add_widget(anchor)
 
 def free_stencil(stencil_view):
 	scatter = stencil_view.children[0]
@@ -428,6 +464,8 @@ class PixelArt(CoreImage):
 class WhiteBackgroundLayout(RelativeLayout):
 	def __init__(self, **kwargs):
 		super(RelativeLayout, self).__init__(**kwargs)
+
+
 # 		self.kv = Builder.load_string('''
 # RelativeLayout:
 # 	canvas.before:
@@ -485,9 +523,45 @@ class FileCarousel(Carousel):
 			# video.options = {'eos': 'loop'}
 			# video.allow_stretch = True
 			# video.loaded = True
+			orientation = self.file_settings.get(filename, {}).get('orientation', False)
+			if orientation:
+				vid = cv2.VideoCapture(filepath)
+				height = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
+				width = vid.get(cv2.CAP_PROP_FRAME_WIDTH)
+				align(widget, orientation, width, height, window_width, window_height)
+
+			background = get_forced_background(self.file_settings, filename, window_width, window_height)
+			if background:
+				parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
+				parent.add_widget(background)
+				parent.add_widget(widget)
+				widget = parent
+			elif orientation:
+				parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
+				parent.add_widget(widget)
+				widget = parent
+
 		elif ext == '.gif':
 			anim_delay = 0.04 if filename in ['cannonbreed1576816909458149376_1.gif', 'cannonbreed1603175701049327616_1.gif'] else 0.1
 			widget = Image(source=filepath, fit_mode='contain', anim_delay=anim_delay, nocache=True)
+
+			orientation = self.file_settings.get(filename, {}).get('orientation', False)
+			if orientation:
+				vid = cv2.VideoCapture(filepath)
+				height = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
+				width = vid.get(cv2.CAP_PROP_FRAME_WIDTH)
+				align(widget, orientation, width, height, window_width, window_height)
+
+			background = get_forced_background(self.file_settings, filename, window_width, window_height)
+			if background:
+				parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
+				parent.add_widget(background)
+				parent.add_widget(widget)
+				widget = parent
+			elif orientation:
+				parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
+				parent.add_widget(widget)
+				widget = parent
 		else:
 			# if filename in PIXEL_FILES:
 			if self.file_settings.get(filename, {}).get('is_pixel', False):
@@ -496,7 +570,7 @@ class FileCarousel(Carousel):
 			else:
 				image = CoreImage(filepath, keep_data=True, nocache=True)
 
-			if PERFORMANT_MODE:
+			if not PERFORMANT_MODE:
 				parent = CustomScatterLayout(do_rotation=False, scale_min=1)
 			else:
 				parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
@@ -509,12 +583,11 @@ class FileCarousel(Carousel):
 			# only need to create a background if the entire window isn't covered
 			# if not PERFORMANT_MODE and image.height / image.width != window_height / window_width:
 			if image.height / image.width != window_height / window_width:
+				forced_background = get_forced_background(self.file_settings, filename, window_width, window_height)
 
-				force_blur = self.file_settings.get(filename, {}).get('background', '') == 'b'
-
-				# if force_blur:
-
-				if not force_blur:
+				if forced_background:
+					parent.add_widget(forced_background)
+				else:
 					if orientation and orientation == 'l':
 						pixels = [
 							image.read_pixel(image.texture.size[0] - 1, 0),
@@ -533,70 +606,50 @@ class FileCarousel(Carousel):
 							image.read_pixel(image.texture.size[0] - 1, image.texture.size[1] - 1),
 						]
 
-				# print(pixel_1, pixel_2, pixel_3, pixel_4)
+					# print(pixel_1, pixel_2, pixel_3, pixel_4)
 
-				if force_blur or (not all_pixels_transparent(pixels)):
-					# image does not have transparent edges, so apply a background
-					if not force_blur:
+					if not all_pixels_transparent(pixels):
+						# image does not have transparent edges, so apply a background
 						background_color = get_background_color(pixels)
-					if not force_blur and background_color is not None:
-						parent.add_widget(Image(color=background_color, size_hint=(1.0, 1.0), nocache=True))
-					else:
-						# blur the image as the background
-						# old_blur(parent, filepath, window_width, window_height)
-						# new_blur(parent, filepath, window_width, window_height, image)
-						newer_blur(parent, filepath, window_width, window_height)
+						if background_color is not None:
+							parent.add_widget(Image(color=background_color, size_hint=(1.0, 1.0), nocache=True))
+						else:
+							# blur the image as the background
+							# old_blur(parent, filepath, window_width, window_height)
+							# new_blur(parent, filepath, window_width, window_height, image)
+							bg = newer_blur(filename, window_width, window_height)
+							parent.add_widget(bg)
 
-						# with PilImage.open(filepath) as pil_image:
-						# 	try:
-						# 		blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(70))
-						# 	except ValueError:
-						# 		blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(70))
-						# 	data = BytesIO()
-						# 	blurred_pil_image.save(data, format='png')
-						# 	data.seek(0) # yes you actually need this
+							# with PilImage.open(filepath) as pil_image:
+							# 	try:
+							# 		blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(70))
+							# 	except ValueError:
+							# 		blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(70))
+							# 	data = BytesIO()
+							# 	blurred_pil_image.save(data, format='png')
+							# 	data.seek(0) # yes you actually need this
 
-						# 	almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
-						# 	# blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
-						# 	blurred = Image(size=(window_width, window_height), fit_mode='fill', nocache=True)
-						# 	blurred.texture = almost_blurred.texture
-						# 	parent.add_widget(blurred)
+							# 	almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
+							# 	# blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
+							# 	blurred = Image(size=(window_width, window_height), fit_mode='fill', nocache=True)
+							# 	blurred.texture = almost_blurred.texture
+							# 	parent.add_widget(blurred)
 
-						# 	radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
-						# 	parent.add_widget(radial_gradient)
+							# 	radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
+							# 	parent.add_widget(radial_gradient)
 
-						# 	del almost_blurred
-						# 	del blurred_pil_image
-						# 	del data
+							# 	del almost_blurred
+							# 	del blurred_pil_image
+							# 	del data
 
-						# del pil_image
+							# del pil_image
 
 			# image_widget = Image(texture=image.texture, size_hint=(1.0, 1.0))
 			# this mostly works, but it crops things slightly - maybe it's just a resolution thing and when going to 1920/1080 it'll be fixed?
 			image_widget = Image(texture=image.texture, fit_mode='contain', nocache=True)
 
 			if orientation:
-				actual_width = image.texture.size[0] * (window_height / image.texture.size[1]) if image.texture.size[1] > window_height else image.texture.size[0]
-				if orientation == 'l':
-					# image_widget.pos_hint = {'left': 1}
-					# image_widget.pos_hint = {'x': -1}
-					# image_widget.pos_hint = {'x': -0.5}
-					# image_widget.pos = (0, 0)
-					# image_widget.pos = (0, 0)
-					# anchor = AnchorLayout(size_hint=(1.0, 1.0), size=(window_width, window_height), anchor_x='left', anchor_y='center')
-					# anchor.add_widget(image_widget)
-					# parent.add_widget(anchor)
-					image_widget.pos = (0 - (window_width - actual_width) / 2, 0)
-				elif orientation == 'r':
-					# image_widget.pos_hint = {'right': 1}
-					# image_widget.pos_hint = {'x': 1}
-					# image_widget.pos_hint = {'x': 0.5}
-					# print('image widget width:', image_widget.width, image.width)
-					image_widget.pos = ((window_width - actual_width) / 2, 0)
-					# anchor = AnchorLayout(size_hint=(1.0, 1.0), size=(window_width, window_height), anchor_x='right', anchor_y='center')
-					# image_widget.anchor_x = 'right'
-					# anchor.add_widget(image_widget)
-					# parent.add_widget(anchor)
+				align(image_widget, orientation, image.texture.size[0], image.texture.size[1], window_width, window_height)
 			
 			parent.add_widget(image_widget)
 
@@ -633,6 +686,8 @@ class FileCarousel(Carousel):
 		files = [f for f in os.listdir(self.files_dir) if f != '.DS_Store' and f != 'blurred' and os.path.splitext(f)[1] in acceptable_extensions]
 		if CONFIG.get('general', 'only_pixel_art') != '0':
 			files = [f for f in files if self.file_settings.get(f, {}).get('is_pixel', False)]
+
+		# files = [f for f in files if self.file_settings.get(f, {}).get('orientation', False) or self.file_settings.get(f, {}).get('background', False)]
 
 		shuffle(files)
 
@@ -821,6 +876,8 @@ class FileCarousel(Carousel):
 		# 	self.index = len(self.file_list) - 1
 
 	def current_slide_zoomed(self):
+		if PERFORMANT_MODE:
+			return False
 		return isinstance(self.current_slide, StencilView) and self.current_slide.children[0].scale != 1
 
 
@@ -862,6 +919,22 @@ def normal_rgb_to_kivy_rgba(pixel_color):
 
 def euclidean_distance(color_1, color_2):
 	return math.sqrt((color_1[0] - color_2[0]) ** 2 + (color_1[1] - color_2[1]) ** 2 + (color_1[2] - color_2[2]) ** 2)
+
+def is_hex(string):
+	# Check if the string starts with '#' and is followed by 6 or 8 hexadecimal characters
+	if string.startswith('#') and (len(string) == 7 or len(string) == 9):
+		return all(c in '0123456789abcdefABCDEF' for c in string[1:])
+	return False
+
+def hex_to_color(hex_color):
+	# hex_color = hex_color.lstrip('#')
+	# return [int(hex_color[i:i+2], 16) for i in (0, 2, 4)]
+	if len(hex_color) == 7:
+		return [int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)]
+	elif len(hex_color) == 9:
+		return [int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16), int(hex_color[7:9], 16)]
+	else:
+		raise ValueError("Invalid hex color format")
 
 def average_color(color_list):
 	r = 0
