@@ -6,7 +6,8 @@ import math
 import os
 from io import BytesIO
 from random import shuffle
-import cv2
+# import cv2
+import ffmpeg
 
 #os.environ['KIVY_IMAGE'] = 'pil'
 
@@ -525,9 +526,13 @@ class FileCarousel(Carousel):
 			# video.loaded = True
 			orientation = self.file_settings.get(filename, {}).get('orientation', False)
 			if orientation:
-				vid = cv2.VideoCapture(filepath)
-				height = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
-				width = vid.get(cv2.CAP_PROP_FRAME_WIDTH)
+				# vid = cv2.VideoCapture(filepath)
+				# height = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
+				# width = vid.get(cv2.CAP_PROP_FRAME_WIDTH)
+
+				video_streams = ffmpeg.probe(filepath, select_streams = "v")
+				width = video_streams['streams'][0]['width']
+				height = video_streams['streams'][0]['height']
 				align(widget, orientation, width, height, window_width, window_height)
 
 			background = get_forced_background(self.file_settings, filename, window_width, window_height)
