@@ -10,6 +10,7 @@ from random import shuffle
 import ffmpeg
 
 #os.environ['KIVY_IMAGE'] = 'pil'
+os.environ["KIVY_VIDEO"] = "ffpyplayer"
 
 from kivy.lang import Builder
 from kivy.core.window import Window
@@ -121,11 +122,23 @@ if not os.path.exists('fanart_config.ini'):
 	# only pixel art: true xor false
 	# debug
 
+def play_slide_if_video(slide):
+	if isinstance(slide, Video):
+		if slide.state != "play":
+			slide.state = "play"
+	else:
+		if slide is not None and slide.children:
+			for child in slide.children:
+				if isinstance(child, Video):
+					if child.state != "play":
+						child.state = "play"
+					break
 
 def advance_carousel(dt):
 	global CAROUSEL
-	if isinstance(CAROUSEL.next_slide, Video):
-		CAROUSEL.next_slide.state = "play"
+	# if isinstance(CAROUSEL.next_slide, Video):
+	# 	CAROUSEL.next_slide.state = "play"
+	play_slide_if_video(CAROUSEL.next_slide)
 	CAROUSEL.load_next()
 
 	# global SLIDE_ADVANCE_EVENT
@@ -292,6 +305,7 @@ def get_forced_background(file_settings, filename, window_width, window_height):
 		return newer_blur(filename, window_width, window_height)
 	elif is_hex(forced_background):
 		color = hex_to_color(forced_background)
+		print("color", color, forced_background)
 		return Image(color=color, size_hint=(1.0, 1.0), nocache=True)
 
 def align(widget, orientation, width, height, window_width, window_height):
@@ -533,10 +547,13 @@ class FileCarousel(Carousel):
 				video_streams = ffmpeg.probe(filepath, select_streams = "v")
 				width = video_streams['streams'][0]['width']
 				height = video_streams['streams'][0]['height']
+
 				align(widget, orientation, width, height, window_width, window_height)
 
 			background = get_forced_background(self.file_settings, filename, window_width, window_height)
+			print("\n\n\n\n\nforced background", background)
 			if background:
+				print("background for video")
 				parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
 				parent.add_widget(background)
 				parent.add_widget(widget)
@@ -552,10 +569,19 @@ class FileCarousel(Carousel):
 
 			orientation = self.file_settings.get(filename, {}).get('orientation', False)
 			if orientation:
-				vid = cv2.VideoCapture(filepath)
-				height = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
-				width = vid.get(cv2.CAP_PROP_FRAME_WIDTH)
+				# vid = cv2.VideoCapture(filepath)
+				# height = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
+				# width = vid.get(cv2.CAP_PROP_FRAME_WIDTH)
+
+				video_streams = ffmpeg.probe(filepath, select_streams = "v")
+				width = video_streams['streams'][0]['width']
+				height = video_streams['streams'][0]['height']
+
+				print("width:", width, "height:", height)
+
 				align(widget, orientation, width, height, window_width, window_height)
+
+				pass
 
 			background = get_forced_background(self.file_settings, filename, window_width, window_height)
 			if background:
@@ -692,7 +718,9 @@ class FileCarousel(Carousel):
 		if CONFIG.get('general', 'only_pixel_art') != '0':
 			files = [f for f in files if self.file_settings.get(f, {}).get('is_pixel', False)]
 
-		# files = [f for f in files if self.file_settings.get(f, {}).get('orientation', False) or self.file_settings.get(f, {}).get('background', False)]
+		files = [f for f in files if (self.file_settings.get(f, {}).get('orientation', False) or self.file_settings.get(f, {}).get('background', False)) and f.count('Cortoony_EJy')]
+
+		print('files:', files)
 
 		shuffle(files)
 
@@ -783,14 +811,15 @@ class FileCarousel(Carousel):
 		if value == None:
 			return
 
-		if isinstance(self.slides[value], Video):
-			# print("it's a video")
-			# self.slides[value].position = 0
-			if self.slides[value].state != "play":
-				self.slides[value].state = "play"
-			# self.slides[value].options = {'eos': 'loop'}
-			# self.slides[value].allow_stretch = True
-			# self.slides[value].loaded = True
+		play_slide_if_video(self.slides[value])
+		# if isinstance(self.slides[value], Video):
+		# 	# print("it's a video")
+		# 	# self.slides[value].position = 0
+		# 	if self.slides[value].state != "play":
+		# 		self.slides[value].state = "play"
+		# 	# self.slides[value].options = {'eos': 'loop'}
+		# 	# self.slides[value].allow_stretch = True
+		# 	# self.slides[value].loaded = True
 
 		if self.applying_config:
 			return
@@ -935,9 +964,7 @@ def hex_to_color(hex_color):
 	# hex_color = hex_color.lstrip('#')
 	# return [int(hex_color[i:i+2], 16) for i in (0, 2, 4)]
 	if len(hex_color) == 7:
-		return [int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)]
-	elif len(hex_color) == 9:
-		return [int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16), int(hex_color[7:9], 16)]
+		return [int(hex_color[1:3], 16) / 255.0, int(hex_color[3:5], 16) / 255.0, int(hex_color[5:7], 16) / 255.0]
 	else:
 		raise ValueError("Invalid hex color format")
 
