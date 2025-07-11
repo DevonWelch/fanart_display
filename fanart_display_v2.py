@@ -550,6 +550,8 @@ class FileCarousel(Carousel):
 
 				align(widget, orientation, width, height, window_width, window_height)
 
+				del video_streams
+
 			background = get_forced_background(self.file_settings, filename, window_width, window_height)
 			print("\n\n\n\n\nforced background", background)
 			if background:
@@ -581,7 +583,7 @@ class FileCarousel(Carousel):
 
 				align(widget, orientation, width, height, window_width, window_height)
 
-				pass
+				del video_streams
 
 			background = get_forced_background(self.file_settings, filename, window_width, window_height)
 			if background:
