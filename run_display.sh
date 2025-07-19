@@ -7,8 +7,9 @@ if [ -e "${PIDFILE}" ] && (ps -u $(whoami) -opid= |
                            grep -P "^\s*$(cat ${PIDFILE})$" &> /dev/null); then
   time_running=$(ps -o etimes= -p "$(cat ${PIDFILE})")
   # if ps -o etimes= -p "$(cat ${PIDFILE})" > 86400; then
-  if [ "$time_running" -gt 86400 ]; then
-    echo "Process has been running for more than 24 hours, restarting."
+  # if [ "$time_running" -gt 86400 ]; then
+  if [ "$time_running" -gt 14400 ]; then
+    echo "Process has been running for more than 4 hours, restarting."
     kill -9 $(cat "${PIDFILE}") &> /dev/null
     rm -f "${PIDFILE}"
   else

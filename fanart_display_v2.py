@@ -337,6 +337,20 @@ def free_stencil(stencil_view):
 		del child
 	del scatter
 
+def free_slide(deleted_widget):
+	is_video = False
+	if isinstance(deleted_widget, Video):
+		deleted_widget.unload()
+	else:
+		for child in deleted_widget.children:
+			if isinstance(child, Video):
+				child.unload()
+				del child
+				is_video = True
+				
+	if not is_video:
+		free_stencil(deleted_widget)
+
 class CustomScatterLayout(ScatterLayout):
 	def __init__(self, **kwargs):
 		super(CustomScatterLayout, self).__init__(**kwargs)
@@ -855,10 +869,7 @@ class FileCarousel(Carousel):
 				print('new widget:', new_widget)
 				# don't ask me why, but -1 adds it to the beginning of the slides
 				self.add_widget(new_widget, index=-1)
-				if isinstance(deleted_widget, Video):
-					deleted_widget.unload()
-				else:
-					free_stencil(deleted_widget)
+				free_slide(deleted_widget)
 				del deleted_widget
 			elif value == 3:
 				print('here2')
@@ -874,10 +885,7 @@ class FileCarousel(Carousel):
 				print('adding at index:', self.true_index + 2)
 				# don't ask me why, but zero adds it to the end of the slides
 				self.add_widget(new_widget, index=0)
-				if isinstance(deleted_widget, Video):
-					deleted_widget.unload()
-				else:
-					free_stencil(deleted_widget)
+				free_slide(deleted_widget)
 				del deleted_widget
 			# self.index 
 			# del deleted_widget
