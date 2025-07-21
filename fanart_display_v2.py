@@ -347,8 +347,8 @@ def free_slide(deleted_widget):
 				child.unload()
 				del child
 				is_video = True
-				
-	if not is_video:
+
+	if not is_video and deleted_widget.children:
 		free_stencil(deleted_widget)
 
 class CustomScatterLayout(ScatterLayout):
