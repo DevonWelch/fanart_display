@@ -457,13 +457,7 @@ def get_video_texture_pixel(video, x, y):
     # a = pixel_data[index + 3]
 
 def add_background(parent, file_settings, filename, window_width, window_height, widget, default_background=None):
-
-	print(filename, window_width, window_height)
 	forced_background = get_forced_background(file_settings, filename, window_width, window_height)
-	print('forced background:', forced_background, 'edfault background:', default_background)
-
-
-	forced_background = None
 
 	if forced_background:
 		parent.add_widget(forced_background)
