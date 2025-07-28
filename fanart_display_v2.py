@@ -910,7 +910,7 @@ class FileCarousel(Carousel):
 		if CONFIG.get('general', 'only_pixel_art') != '0':
 			files = [f for f in files if self.file_settings.get(f, {}).get('is_pixel', False)]
 
-		files = [f for f in files if os.path.splitext(f)[1] == '.mp4' and self.file_settings.get(f, {}).get('background', False)]
+		# files = [f for f in files if os.path.splitext(f)[1] == '.mp4' and self.file_settings.get(f, {}).get('background', False)]
 
 		# files = [f for f in files if (self.file_settings.get(f, {}).get('orientation', False) or self.file_settings.get(f, {}).get('background', False)) and f.count('Cortoony_EJy')]
 
