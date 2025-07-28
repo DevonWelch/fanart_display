@@ -11,8 +11,8 @@ from random import shuffle
 # import numpy as np
 # import cv2
 import ffmpeg
-from pympler.tracker import SummaryTracker
-tracker = SummaryTracker()
+# 
+# 
 
 #os.environ['KIVY_IMAGE'] = 'pil'
 os.environ["KIVY_VIDEO"] = "ffpyplayer"
@@ -61,6 +61,10 @@ RESET_ZOOM_EVENT = None
 CLOSE_NAV_TIMEOUT = None
 LOCKED = False
 DEBUG = False
+
+if DEBUG:
+	from pympler.tracker import SummaryTracker
+	tracker = SummaryTracker()
 
 NUM_SLIDES = 0
 
