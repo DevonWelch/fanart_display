@@ -1,16 +1,23 @@
 # from kivy import * 
 from copy import copy
+from functools import partial
 import gc
 import json
 import math
 import os
 from io import BytesIO
 from random import shuffle
+import psutil
+import numpy as np
 # import cv2
 import ffmpeg
+from pympler.tracker import SummaryTracker
+tracker = SummaryTracker()
 
 #os.environ['KIVY_IMAGE'] = 'pil'
 os.environ["KIVY_VIDEO"] = "ffpyplayer"
+# os.environ["KIVY_VIDEO"] = "ffmpeg"
+# os.environ["KIVY_VIDEO"] = "gstplayer"
 
 from kivy.lang import Builder
 from kivy.core.window import Window
@@ -55,12 +62,15 @@ CLOSE_NAV_TIMEOUT = None
 LOCKED = False
 DEBUG = False
 
+NUM_SLIDES = 0
+
 PERFORMANT_MODE = True
 
 CURRENT_SETTINGS = None
 
 PIXEL_FILES = ['MakDeetsMuch1645881808448536576.png', 'child0.png', 'child1.png', 'KadaburaDraws1566865598193319938.png']
 FILES_DIR = '../fanart'
+CACHED_BACKGROUNDS_FOLDER = f'{FILES_DIR}/cached_backgrounds'
 SETTINGS_FILE = f'{FILES_DIR}/settings.json'
 
 CONFIG = ConfigParser()
@@ -136,10 +146,18 @@ def play_slide_if_video(slide):
 
 def advance_carousel(dt):
 	global CAROUSEL
+	# global NUM_SLIDES
 	# if isinstance(CAROUSEL.next_slide, Video):
 	# 	CAROUSEL.next_slide.state = "play"
 	play_slide_if_video(CAROUSEL.next_slide)
 	CAROUSEL.load_next()
+
+	# NUM_SLIDES += 1
+
+	# if NUM_SLIDES >= 10:
+	# 	1 / 0 
+
+	tracker.print_diff()
 
 	# global SLIDE_ADVANCE_EVENT
 	# SLIDE_ADVANCE_EVENT = Clock.schedule_once(advance_carousel, SLIDE_DURATION)
@@ -151,6 +169,7 @@ def clear_slide_advance():
 		SLIDE_ADVANCE_EVENT = None
 
 def enqueue_slide_advance(duration=int(CONFIG.get('general', 'slide_duration'))):
+	# return
 	global SLIDE_ADVANCE_EVENT
 	if SLIDE_ADVANCE_EVENT is not None:
 		Clock.unschedule(SLIDE_ADVANCE_EVENT)
@@ -340,16 +359,199 @@ def free_stencil(stencil_view):
 def free_slide(deleted_widget):
 	is_video = False
 	if isinstance(deleted_widget, Video):
+		# print('pixel:', deleted_widget.texture.pixels[0])
+		# print('pixel:', get_video_texture_pixel(deleted_widget, 0, 0))
+		# deleted_widget.read_pixel(deleted_widget.texture.size[0] - 1, 0)
 		deleted_widget.unload()
 	else:
 		for child in deleted_widget.children:
 			if isinstance(child, Video):
+				# child.read_pixel(child.texture.size[0] - 1, 0)
+				# print('pixel:', child.texture.pixels[0])
+				# print('pixel:', get_video_texture_pixel(child, 0, 0))
 				child.unload()
 				del child
 				is_video = True
+			else:
+				del child
+
+	print('is video:', is_video)
 
 	if not is_video and deleted_widget.children:
 		free_stencil(deleted_widget)
+
+def get_or_create_thumbnail(filepath):
+	filename = os.path.splitext(os.path.basename(filepath))[0]
+	thumbnail_path = f'{FILES_DIR}/thumbnails/{filename}.png'
+	# if thumbnail doesn't exist, create it
+	if not os.path.exists(thumbnail_path):
+		print("creating thumbnail for", filename)
+		ffmpeg.input(
+			filepath
+		).filter(
+			'thumbnail'
+		).output(
+			thumbnail_path,
+			vframes=1
+		).run(
+			overwrite_output=True
+		)
+		# ffmpeg.input(
+		# 	filepath
+		# ).output(
+		# 	thumbnail_path,
+		# 	vframes=1
+		# ).run()
+
+
+	# print("\n\n\n\n")
+
+	# # buffer = BytesIO()
+	# process = ffmpeg.input(
+	# 	filepath
+	# # ).filter(
+	# # 	'thumbnail'
+	# # ).output(
+	# # 	"pipe:"
+	# ).output(
+	# 	"pipe:", 
+	# 	vframes=1,
+	# 	format='rawvideo', pix_fmt='rgb24'
+	# 	#  format="png"
+	# ).run_async(
+	# 	pipe_stdout=True, pipe_stderr=True
+	# )
+
+	# out = process.stdout.read()
+
+	# # out, err = process.communicate()
+
+	# # process.stdin.close()
+	# process.wait()
+
+	# # print(out, err)
+
+	# # print(out)
+
+	# # out.seek(0) # yes you actually need this
+
+	# frame_data = np.frombuffer(out, np.uint8).reshape([height, width, 3])
+
+	return CoreImage(thumbnail_path, ext="png", nocache=True, keep_data=True)
+
+def get_video_texture_pixel(video, x, y):
+	# size = 3 if data.fmt in ('rgb', 'bgr') else 4
+	size = 4
+	index = y * video.texture.width * size + x * size
+	print('index:', index, 'size:', size, 'texture size:', video.texture.size, 'video texture pixels:', len(video.texture.pixels))
+	raw = bytearray(video.texture.pixels[index:index + size])
+	return [c / 255.0 for c in raw]
+	# r = pixel_data[index]
+    # g = pixel_data[index + 1]
+    # b = pixel_data[index + 2]
+    # a = pixel_data[index + 3]
+
+def add_background(parent, file_settings, filename, window_width, window_height, widget, default_background=None):
+
+	print(filename, window_width, window_height)
+	forced_background = get_forced_background(file_settings, filename, window_width, window_height)
+	print('forced background:', forced_background, 'edfault background:', default_background)
+
+
+	forced_background = None
+
+	if forced_background:
+		parent.add_widget(forced_background)
+		return
+	
+	try:
+		orientation = file_settings.get(filename, {}).get('orientation', False)
+		cache_file = os.path.join(CACHED_BACKGROUNDS_FOLDER, os.path.splitext(filename)[0] + '.txt')
+		if os.path.isfile(cache_file):
+			with open(cache_file, 'r') as f:
+				pixels = json.load(f)
+		else:
+			# image = get_image()
+			if isinstance(widget, Video):
+				# print(image.texture.pixels)
+				read_pixel = lambda w, x, y: get_video_texture_pixel(w, x, y)
+			else:
+				read_pixel = lambda w, x, y: w.read_pixel(x, y)
+			if orientation and orientation == 'l':
+				pixels = [
+					read_pixel(widget, widget.texture.size[0] - 1, 0),
+					read_pixel(widget, widget.texture.size[0] - 1, widget.texture.size[1] - 1),
+				]
+			elif orientation and orientation == 'r':
+				pixels = [
+					read_pixel(widget, 0, 0),
+					read_pixel(widget, 0, widget.texture.size[1] - 1),
+				]
+			else:
+				pixels = [
+					read_pixel(widget, 0, 0),
+					read_pixel(widget, 0, widget.texture.size[1] - 1),
+					read_pixel(widget, widget.texture.size[0] - 1, 0),
+					read_pixel(widget, widget.texture.size[0] - 1, widget.texture.size[1] - 1),
+				]
+			with open(cache_file, 'w') as f:
+				json.dump(pixels, f)
+
+
+		print(pixels, orientation)
+
+		# print(pixel_1, pixel_2, pixel_3, pixel_4)
+
+		if all_pixels_transparent(pixels):
+			return
+
+		# image does not have transparent edges, so apply a background
+		background_color = get_background_color(pixels)
+		print('background color:', background_color)
+		if background_color is not None:
+			parent.add_widget(Image(color=background_color, size_hint=(1.0, 1.0), nocache=True), index=1)
+		elif default_background == 'blur':
+			# blur the image as the background
+			# old_blur(parent, filepath, window_width, window_height)
+			# new_blur(parent, filepath, window_width, window_height, image)
+			bg = newer_blur(filename, window_width, window_height)
+			parent.add_widget(bg)
+
+			# with PilImage.open(filepath) as pil_image:
+			# 	try:
+			# 		blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(70))
+			# 	except ValueError:
+			# 		blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(70))
+			# 	data = BytesIO()
+			# 	blurred_pil_image.save(data, format='png')
+			# 	data.seek(0) # yes you actually need this
+
+			# 	almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
+			# 	# blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
+			# 	blurred = Image(size=(window_width, window_height), fit_mode='fill', nocache=True)
+			# 	blurred.texture = almost_blurred.texture
+			# 	parent.add_widget(blurred)
+
+			# 	radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
+			# 	parent.add_widget(radial_gradient)
+
+			# 	del almost_blurred
+			# 	del blurred_pil_image
+			# 	del data
+
+			# del pil_image
+	except Exception as e:
+		print(e)
+		Clock.schedule_once(partial(
+			add_background, 
+			parent, 
+			file_settings, 
+			filename, 
+			window_width, 
+			window_height, 
+			widget, 
+			# default_background=default_background
+		), 1)
 
 class CustomScatterLayout(ScatterLayout):
 	def __init__(self, **kwargs):
@@ -548,11 +750,18 @@ class FileCarousel(Carousel):
 			widget.options = {'eos': 'loop'}
 			widget.allow_stretch = True
 			widget.loaded = True
+
+
 			# video.state = "play"
 			# video.options = {'eos': 'loop'}
 			# video.allow_stretch = True
 			# video.loaded = True
+			parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
 			orientation = self.file_settings.get(filename, {}).get('orientation', False)
+
+			# width = widget.texture.size[0]
+			# height = widget.texture.size[1]
+
 			if orientation:
 				# vid = cv2.VideoCapture(filepath)
 				# height = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
@@ -566,23 +775,49 @@ class FileCarousel(Carousel):
 
 				del video_streams
 
-			background = get_forced_background(self.file_settings, filename, window_width, window_height)
-			print("\n\n\n\n\nforced background", background)
-			if background:
-				print("background for video")
-				parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
-				parent.add_widget(background)
-				parent.add_widget(widget)
-				widget = parent
-			elif orientation:
-				parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
-				parent.add_widget(widget)
-				widget = parent
+			# video_streams = ffmpeg.probe(filepath, select_streams = "v")
+			# width = video_streams['streams'][0]['width']
+			# height = video_streams['streams'][0]['height']
+
+			# print("width:", width, "height:", height, video_streams)
+
+			
+
+			# print([
+			# 				image.read_pixel(0, 0),
+			# 				image.read_pixel(0, image.texture.size[1] - 1),
+			# 				image.read_pixel(image.texture.size[0] - 1, 0),
+			# 				image.read_pixel(image.texture.size[0] - 1, image.texture.size[1] - 1),
+			# 			])
+
+			add_background(
+				parent, 
+				self.file_settings, 
+				filename, 
+				window_width, 
+				window_height, 
+				# lambda: get_or_create_thumbnail(filepath)
+				# lambda: widget
+				widget
+			)
+
+			# widget.bind(on_load=lambda x: print("\n\n\n\n\nvideo loaded", x.state, x.texture.size, x.texture.pixels))
+			
+
+			# background = get_forced_background(self.file_settings, filename, window_width, window_height)
+			# print("\n\n\n\n\nforced background", background)
+			# if background:
+			# 	parent.add_widget(background)
+
+			parent.add_widget(widget)
+			widget = parent
 
 		elif ext == '.gif':
 			anim_delay = 0.04 if filename in ['cannonbreed1576816909458149376_1.gif', 'cannonbreed1603175701049327616_1.gif'] else 0.1
 			widget = Image(source=filepath, fit_mode='contain', anim_delay=anim_delay, nocache=True)
 
+			parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
+
 			orientation = self.file_settings.get(filename, {}).get('orientation', False)
 			if orientation:
 				# vid = cv2.VideoCapture(filepath)
@@ -593,22 +828,20 @@ class FileCarousel(Carousel):
 				width = video_streams['streams'][0]['width']
 				height = video_streams['streams'][0]['height']
 
-				print("width:", width, "height:", height)
+				# print("width:", width, "height:", height, video_streams)
 
 				align(widget, orientation, width, height, window_width, window_height)
 
 				del video_streams
 
+			# add_background()
+
 			background = get_forced_background(self.file_settings, filename, window_width, window_height)
 			if background:
-				parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
 				parent.add_widget(background)
-				parent.add_widget(widget)
-				widget = parent
-			elif orientation:
-				parent = WhiteBackgroundLayout(size_hint=(1.0, 1.0), size=(window_width, window_height))
-				parent.add_widget(widget)
-				widget = parent
+
+			parent.add_widget(widget)
+			widget = parent
 		else:
 			# if filename in PIXEL_FILES:
 			if self.file_settings.get(filename, {}).get('is_pixel', False):
@@ -630,66 +863,9 @@ class FileCarousel(Carousel):
 			# only need to create a background if the entire window isn't covered
 			# if not PERFORMANT_MODE and image.height / image.width != window_height / window_width:
 			if image.height / image.width != window_height / window_width:
-				forced_background = get_forced_background(self.file_settings, filename, window_width, window_height)
-
-				if forced_background:
-					parent.add_widget(forced_background)
-				else:
-					if orientation and orientation == 'l':
-						pixels = [
-							image.read_pixel(image.texture.size[0] - 1, 0),
-							image.read_pixel(image.texture.size[0] - 1, image.texture.size[1] - 1),
-						]
-					elif orientation and orientation == 'r':
-						pixels = [
-							image.read_pixel(0, 0),
-							image.read_pixel(0, image.texture.size[1] - 1),
-						]
-					else:
-						pixels = [
-							image.read_pixel(0, 0),
-							image.read_pixel(0, image.texture.size[1] - 1),
-							image.read_pixel(image.texture.size[0] - 1, 0),
-							image.read_pixel(image.texture.size[0] - 1, image.texture.size[1] - 1),
-						]
-
-					# print(pixel_1, pixel_2, pixel_3, pixel_4)
-
-					if not all_pixels_transparent(pixels):
-						# image does not have transparent edges, so apply a background
-						background_color = get_background_color(pixels)
-						if background_color is not None:
-							parent.add_widget(Image(color=background_color, size_hint=(1.0, 1.0), nocache=True))
-						else:
-							# blur the image as the background
-							# old_blur(parent, filepath, window_width, window_height)
-							# new_blur(parent, filepath, window_width, window_height, image)
-							bg = newer_blur(filename, window_width, window_height)
-							parent.add_widget(bg)
-
-							# with PilImage.open(filepath) as pil_image:
-							# 	try:
-							# 		blurred_pil_image = pil_image.filter(PilImageFilter.BoxBlur(70))
-							# 	except ValueError:
-							# 		blurred_pil_image = pil_image.convert("RGB").filter(PilImageFilter.BoxBlur(70))
-							# 	data = BytesIO()
-							# 	blurred_pil_image.save(data, format='png')
-							# 	data.seek(0) # yes you actually need this
-
-							# 	almost_blurred = CoreImage(BytesIO(data.read()), ext='png', nocache=True)
-							# 	# blurred = Image(size=(window_width, window_height), fit_mode='cover', nocache=True)
-							# 	blurred = Image(size=(window_width, window_height), fit_mode='fill', nocache=True)
-							# 	blurred.texture = almost_blurred.texture
-							# 	parent.add_widget(blurred)
-
-							# 	radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
-							# 	parent.add_widget(radial_gradient)
-
-							# 	del almost_blurred
-							# 	del blurred_pil_image
-							# 	del data
-
-							# del pil_image
+				# forced_background = get_forced_background(self.file_settings, filename, window_width, window_height)
+				print("\nadding background for image")
+				add_background(parent, self.file_settings, filename, window_width, window_height, image, default_background="blur")
 
 			# image_widget = Image(texture=image.texture, size_hint=(1.0, 1.0))
 			# this mostly works, but it crops things slightly - maybe it's just a resolution thing and when going to 1920/1080 it'll be fixed?
@@ -733,6 +909,8 @@ class FileCarousel(Carousel):
 		files = [f for f in os.listdir(self.files_dir) if f != '.DS_Store' and f != 'blurred' and os.path.splitext(f)[1] in acceptable_extensions]
 		if CONFIG.get('general', 'only_pixel_art') != '0':
 			files = [f for f in files if self.file_settings.get(f, {}).get('is_pixel', False)]
+
+		files = [f for f in files if os.path.splitext(f)[1] == '.mp4' and self.file_settings.get(f, {}).get('background', False)]
 
 		# files = [f for f in files if (self.file_settings.get(f, {}).get('orientation', False) or self.file_settings.get(f, {}).get('background', False)) and f.count('Cortoony_EJy')]
 
@@ -818,6 +996,9 @@ class FileCarousel(Carousel):
 		# 	return
 
 		print('new index:', value)
+		if DEBUG:
+			process = psutil.Process()
+			print('memory:', process.memory_info().rss)  # in bytes 
 		# print('My property a changed to', value)
 		
 		# else:
@@ -827,7 +1008,9 @@ class FileCarousel(Carousel):
 		if value == None:
 			return
 
-		play_slide_if_video(self.slides[value])
+		play_slide_if_video(
+			self.slides[value],
+		)
 		# if isinstance(self.slides[value], Video):
 		# 	# print("it's a video")
 		# 	# self.slides[value].position = 0
@@ -1391,7 +1574,12 @@ class MainApp(MDApp):
 
 
 if __name__ == '__main__':
-	MainApp().run()
+	try:
+		MainApp().run()
+	except ZeroDivisionError:
+		pass
+
+# tracker.print_diff()
 
 
 print("ok")
