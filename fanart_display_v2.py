@@ -161,7 +161,8 @@ def advance_carousel(dt):
 	# if NUM_SLIDES >= 10:
 	# 	1 / 0 
 
-	tracker.print_diff()
+	if DEBUG:
+		tracker.print_diff()
 
 	# global SLIDE_ADVANCE_EVENT
 	# SLIDE_ADVANCE_EVENT = Clock.schedule_once(advance_carousel, SLIDE_DURATION)
