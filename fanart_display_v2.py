@@ -531,7 +531,8 @@ def add_background(parent, file_settings, filename, window_width, window_height,
 			# 	blurred.texture = almost_blurred.texture
 			# 	parent.add_widget(blurred)
 
-			radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
+			# radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
+			radial_gradient = CoreImage(os.path.join(FILES_DIR, 'blurred', 'gradient.png'), nocache=False)
 			parent.add_widget(radial_gradient)
 
 			# 	del almost_blurred
