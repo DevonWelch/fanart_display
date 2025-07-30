@@ -531,8 +531,8 @@ def add_background(parent, file_settings, filename, window_width, window_height,
 			# 	blurred.texture = almost_blurred.texture
 			# 	parent.add_widget(blurred)
 
-			# 	radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
-			# 	parent.add_widget(radial_gradient)
+			radial_gradient = RadialGradient(window_width, window_height, (1,1,1,.25), (0,0,0,0.375))
+			parent.add_widget(radial_gradient)
 
 			# 	del almost_blurred
 			# 	del blurred_pil_image
